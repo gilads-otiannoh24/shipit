@@ -53,13 +53,16 @@ class Filesystem
         return false;
     }
 
-    public function copyFolder(string $source, string $destination, array $ignoreList = [], string $relativeBase = '', bool $log = false): void
+    public function copyFolder(string $source, string $destination, array $ignoreList = [], string $relativeBase = '', bool $log = false, bool $bypassIgnores = false): void
     {
         if (!is_dir($source))
             return;
 
-        $sourceIgnore = $this->parseDeployIgnore($source);
-        $fullIgnoreList = array_unique(array_merge($ignoreList, $sourceIgnore));
+        $fullIgnoreList = $ignoreList;
+        if (!$bypassIgnores) {
+            $sourceIgnore = $this->parseDeployIgnore($source);
+            $fullIgnoreList = array_unique(array_merge($ignoreList, $sourceIgnore));
+        }
 
         if (!$this->dryRun && !file_exists($destination)) {
             mkdir($destination, 0777, true);
@@ -73,12 +76,12 @@ class Filesystem
             $destPath = $destination . '/' . $item;
             $relPath = ltrim($relativeBase . '/' . $item, '/');
 
-            if ($this->isIgnored($relPath, $fullIgnoreList)) {
+            if (!$bypassIgnores && $this->isIgnored($relPath, $fullIgnoreList)) {
                 continue;
             }
 
             if (is_dir($srcPath)) {
-                $this->copyFolder($srcPath, $destPath, $fullIgnoreList, $relPath, $log);
+                $this->copyFolder($srcPath, $destPath, $fullIgnoreList, $relPath, $log, $bypassIgnores);
             } else {
                 if ($this->dryRun) {
                     if ($log) {
@@ -105,11 +108,50 @@ class Filesystem
         }
         if (!is_dir($dir))
             return;
+
+        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+            // Speed up Windows deletion by removing read-only once and using native RD
+            @exec("attrib -R " . escapeshellarg($dir) . " /S /D");
+            @exec("rd /s /q " . escapeshellarg($dir));
+            if (!is_dir($dir))
+                return;
+        }
+
         $items = array_diff(scandir($dir) ?: [], ['.', '..']);
         foreach ($items as $item) {
-            $path = $dir . '/' . $item;
-            is_dir($path) ? $this->removeFolder($path) : unlink($path);
+            $path = $dir . DIRECTORY_SEPARATOR . $item;
+            if (is_dir($path)) {
+                $this->removeFolder($path);
+            } else {
+                @unlink($path);
+            }
         }
-        rmdir($dir);
+        @rmdir($dir);
+    }
+
+    public function clearDirectory(string $dir, array $keep = []): void
+    {
+        if (!is_dir($dir))
+            return;
+
+        $items = array_diff(scandir($dir) ?: [], ['.', '..']);
+        foreach ($items as $item) {
+            if (in_array($item, $keep, true))
+                continue;
+
+            $path = $dir . DIRECTORY_SEPARATOR . $item;
+            if (is_dir($path)) {
+                $this->removeFolder($path);
+            } else {
+                if ($this->dryRun) {
+                    $this->ui->info("[Dry Run] Would delete: $item");
+                } else {
+                    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+                        @exec("attrib -R " . escapeshellarg($path));
+                    }
+                    @unlink($path);
+                }
+            }
+        }
     }
 }

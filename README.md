@@ -23,58 +23,56 @@ Your server must have:
 - **Composer** and **NPM** installed (if your deployment hooks require them).
 - **SSH / Terminal access** to run the deployment script.
 
-## Quick Start
-Install ShipIt via Composer:
+## Installation
+
+### Project-Specific (Recommended)
+Install ShipIt via Composer in your project:
 ```bash
 composer require gilads-otiannoh254/shipit
 ```
+You can then run it via `vendor/bin/shipit`.
 
-Create a .deploy/config.json file in your project root:
-```json
-{
-    "adapter": "codeigniter",
-    "server": "ian@ian.com",
-    "gitRepoUrl": "git@github.com:gilads-otiannoh254/shipit.git",
-    "branch": "master",
-    "user": "ian",
-    "group": "ian",
-    "ownership": [
-        "public",
-        "public_html",
-        "storage",
-        "uploads"
-    ],
-    "permissions": [
-        "public_html",
-        "storage",
-        "uploads"
-    ],
-    "hooks": {
-        "pre-update": "php artisan cache:clear",
-        "post-update": "php artisan cache:clear"
-    }
-}
+### Global Installation (For ease of use)
+Install ShipIt globally to use it anywhere on your server:
+```bash
+composer global require gilads-otiannoh254/shipit
+```
+Ensure your global composer bin directory is in your `$PATH`. You can then simply run `shipit` in any project directory.
+
+## Configuration Management
+
+ShipIt supports hierarchical configuration: **Project Config** (`.deploy/config.json`) overrides **Global Config** (`~/.shipit/config.json`) which overrides **Defaults**.
+
+Use the `config` command to manage settings easily:
+
+```bash
+# View current project config
+shipit config
+
+# Set a project-specific setting
+shipit config user deploy_user
+
+# Set a global default for all projects
+shipit config --global user vps_admin
+shipit config --global backup_path /var/backups/shipit
 ```
 
 ## Running on a Server
 
-Once ShipIt is installed via Composer, you can trigger a deployment directly from your server's terminal (e.g. via SSH).
-
-Navigate to your project root (where your `composer.json` and `.deploy` folder live) and run:
+Navigate to your project root (where your `.deploy` folder lives) and run:
 
 ```bash
-vendor/bin/shipit
+shipit
 ```
 
 ### Available Commands and Options
 
-- `vendor/bin/shipit` - Run the full deployment sequence (Backup -> Update -> Composer -> NPM -> Symlink -> Permissions).
-- `vendor/bin/shipit rollback` - Automatically restore the application from the last successful backup.
-- `vendor/bin/shipit list` - Display all available deployment tasks.
-- `vendor/bin/shipit --dry-run` - Simulate the deployment process and see exactly which files would be copied/deleted, without modifying anything on disk.
-- `vendor/bin/shipit --only=update,composer` - Run *only* the specified tasks.
-- `vendor/bin/shipit --ignore=npm,symlink` - Run all default tasks *except* the specified ones.
-- `vendor/bin/shipit --adapter=ci4` - Override the adapter defined in `config.json` on the fly.
+- `shipit` - Run the full deployment sequence. (Automatically skips backup if the project is empty).
+- `shipit rollback` - Clears the current project (preserving `.deploy` and `.git`), restores the last backup, and runs post-deployment tasks (composer, npm, etc.).
+- `shipit config` - Manage project or global configuration.
+- `shipit list` - Display all available deployment tasks.
+- `shipit --dry-run` - Simulate the deployment/rollback process.
+- `shipit --log` - Show detailed file copy operations.
 
 ### Setting up Auto-Deployments (Webhooks / Cron)
 
@@ -83,14 +81,19 @@ To trigger deployments automatically when you push to Git:
 1. **Option 1: Using a webhook listener.** You can create a simple PHP script exposed publicly (e.g., `deploy.php`) that runs `shell_exec('cd /path/to/project && vendor/bin/shipit > deploy.log 2>&1');` when a payload is received from GitHub/GitLab. Make sure to secure this endpoint with a secret token!
 2. **Option 2: Cron Job.** If you prefer periodic polling, set up a cron job on your server to run `vendor/bin/shipit` on a schedule. Because ShipIt checks if Git cloning is needed, however, a webhook is highly recommended for efficiency.
 
-## How it works under the hood
-
-When you run `vendor/bin/shipit`:
-1. **Backup**: Your current directory is zipped/copied to `../../domain_backups/` relative to your project root.
-2. **Clone**: Your configured Git repository branch is cloned into a temporary folder.
-3. **Merge**: Files are copied over your structure, excluding anything listed in `.deployignore` or standard ignores (like `.env`, `vendor/`, `storage/`).
+When you run `shipit`:
+1. **Backup**: Your current directory is copied to your `backup_path`. If your project only contains `.deploy` or `.git` files, the backup is skipped (first-run optimization).
+2. **Clone**: Your configured Git repository branch is cloned.
+3. **Merge**: Files are copied over, excluding anything in `.deployignore` or standard ignores.
 4. **Build**: Composer and NPM hooks run.
-5. **Permissions**: File and folder ownership and permissions are automatically enforced according to your `config.json`.
+5. **Permissions**: Ownership and permissions are enforced.
+
+## Rollback Logic
+When you run `shipit rollback`:
+1. **Clear**: The current project directory is cleared, but `.deploy` and `.git` are preserved to keep configuration and repository metadata.
+2. **Restore**: The contents of the most recent backup are copied back into the project.
+3. **Rebuild**: Post-deployment tasks like `composer install` and `npm build` are triggered to ensure the environment is fully functional.
+
 
 ## The `.deployignore` File
 
