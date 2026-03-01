@@ -1,0 +1,32 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+if (php_sapi_name() !== 'cli' && empty($_SERVER['argv'])) {
+    exit("This script can only be run from the command line.\n");
+}
+
+$autoloaders = [
+    __DIR__ . '/../vendor/autoload.php',
+    __DIR__ . '/../../../autoload.php',
+];
+
+$autoloaderFound = false;
+foreach ($autoloaders as $autoloader) {
+    if (file_exists($autoloader)) {
+        require_once $autoloader;
+        $autoloaderFound = true;
+        break;
+    }
+}
+
+if (!$autoloaderFound) {
+    echo "Autoloader not found. Please run 'composer install'.\n";
+    exit(1);
+}
+
+use ShipIt\ShipIt;
+
+$app = new ShipIt();
+$app->run($argv);

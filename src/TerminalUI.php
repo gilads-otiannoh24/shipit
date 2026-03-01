@@ -1,0 +1,108 @@
+<?php
+
+declare(strict_types=1);
+
+namespace ShipIt;
+
+class TerminalUI
+{
+    public function color(string $text, string $code): string
+    {
+        return $code . $text . "\033[0m";
+    }
+
+    public function success(string $msg): void
+    {
+        echo $this->color("✅ " . $msg . "\n", "\033[32m");
+    }
+
+    public function error(string $msg): void
+    {
+        echo $this->color("❌ " . $msg . "\n", "\033[31m");
+    }
+
+    public function info(string $msg): void
+    {
+        echo $this->color("ℹ️  " . $msg . "\n", "\033[36m");
+    }
+
+    public function table(array $headers, array $rows): void
+    {
+        $colWidths = [];
+        foreach ($headers as $i => $h) {
+            $colWidths[$i] = mb_strlen($h);
+        }
+        foreach ($rows as $row) {
+            foreach (array_values($row) as $i => $col) {
+                if (!isset($colWidths[$i])) {
+                    $colWidths[$i] = 0;
+                }
+                $colWidths[$i] = max($colWidths[$i], mb_strlen((string) $col));
+            }
+        }
+
+        $sep = function ($widths) {
+            $line = "+";
+            foreach ($widths as $w) {
+                $line .= str_repeat("-", $w + 2) . "+";
+            }
+            return $line;
+        };
+
+        echo $sep($colWidths) . "\n";
+        echo "|";
+        foreach ($headers as $i => $h) {
+            echo " " . $this->mb_str_pad($h, $colWidths[$i]) . " |";
+        }
+        echo "\n";
+        echo $sep($colWidths) . "\n";
+
+        foreach ($rows as $row) {
+            echo "|";
+            foreach (array_values($row) as $i => $col) {
+                echo " " . $this->mb_str_pad((string) $col, $colWidths[$i]) . " |";
+            }
+            echo "\n";
+        }
+        echo $sep($colWidths) . "\n";
+    }
+
+    public function prompt(string $question, string $default = ''): string
+    {
+        $prompt = $question;
+        if ($default !== '') {
+            $prompt .= " [$default]";
+        }
+        $prompt .= ": ";
+        echo $this->color($prompt, "\033[33m");
+        $handle = fopen("php://stdin", "r");
+        $line = fgets($handle);
+        fclose($handle);
+        $result = trim((string) $line);
+        return $result === '' ? $default : $result;
+    }
+
+    private function mb_str_pad(string $string, int $length, string $pad_string = " ", int $pad_type = STR_PAD_RIGHT, ?string $encoding = null): string
+    {
+        if (!$encoding) {
+            $encoding = mb_internal_encoding();
+        }
+        $pad_len = $length - mb_strlen($string, $encoding);
+        if ($pad_len <= 0) {
+            return $string;
+        }
+        $pad_str_len = mb_strlen($pad_string, $encoding);
+        $pad_count = floor($pad_len / $pad_str_len);
+        $remainder = $pad_len % $pad_str_len;
+        $padding = str_repeat($pad_string, (int) $pad_count) . mb_substr($pad_string, 0, $remainder, $encoding);
+        if ($pad_type === STR_PAD_RIGHT) {
+            return $string . $padding;
+        } elseif ($pad_type === STR_PAD_LEFT) {
+            return $padding . $string;
+        } else {
+            $left_padding = mb_substr($padding, 0, (int) floor($pad_len / 2), $encoding);
+            $right_padding = mb_substr($padding, mb_strlen($left_padding, $encoding), null, $encoding);
+            return $left_padding . $string . $right_padding;
+        }
+    }
+}
