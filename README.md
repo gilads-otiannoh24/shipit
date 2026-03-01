@@ -125,3 +125,7 @@ ShipIt traverses your folders and recursively applies any `.deployignore` files 
 - **Protect Webhooks:** If you use a webhook PHP script to trigger deployments, secure the endpoint using a secret token verify from GitHub/GitLab. Do not leave the webhook URL easily guessable.
 - **SSH Keys vs Passwords:** Always authenticate the server against the Git provider using Deploy Keys or SSH keys instead of hardcoding passwords or tokens in URLs.
 
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+

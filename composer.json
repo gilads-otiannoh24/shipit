@@ -1,7 +1,7 @@
 {
     "name": "gilads-otiannoh254/shipit",
     "description": "A professional, modular CLI tool for PHP deployments",
-    "type": "project",
+    "type": "library",
     "require": {
         "php": ">=8.1"
     },
