@@ -1,3 +1,4 @@
 vendor
 examples
 domain_backups
+.phpunit.cache

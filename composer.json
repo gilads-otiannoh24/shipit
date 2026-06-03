@@ -13,5 +13,16 @@
     "bin": [
         "bin/shipit"
     ],
-    "minimum-stability": "stable"
+    "autoload-dev": {
+        "psr-4": {
+            "ShipIt\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "stable",
+    "require-dev": {
+        "phpunit/phpunit": "^13.1"
+    },
+    "scripts": {
+        "test": "phpunit --colors=always"
+    }
 }

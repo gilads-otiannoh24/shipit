@@ -31,6 +31,21 @@ class TaskRunner
         $this->postHooks[$taskName][] = $hook;
     }
 
+    public function getTasks(): array
+    {
+        return $this->tasks;
+    }
+
+    public function getPreHooks(): array
+    {
+        return $this->preHooks;
+    }
+
+    public function getPostHooks(): array
+    {
+        return $this->postHooks;
+    }
+
     public function mergeRunOrder(array $baseOrder, array $rules): array
     {
         $order = $baseOrder;
