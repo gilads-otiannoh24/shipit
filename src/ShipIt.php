@@ -11,7 +11,7 @@ use ShipIt\Adapters\ViteAdapter;
 
 class ShipIt
 {
-    public const VERSION = '1.2.0';
+    public const VERSION = '0.0.2';
 
     private TerminalUI $ui;
     private TaskRunner $runner;
@@ -572,7 +572,7 @@ class ShipIt
                 }
 
                 $choice = $this->ui->prompt("Select backup (1-" . count($backups) . ")", "1");
-                $choiceIdx = (int)$choice - 1;
+                $choiceIdx = (int) $choice - 1;
 
                 if (isset($backups[$choiceIdx])) {
                     $selectedBackup = $backups[$choiceIdx];
@@ -643,7 +643,7 @@ class ShipIt
                     $date = $parts[0];
                     $time = $parts[1];
                     $formattedDate = substr($date, 0, 4) . '-' . substr($date, 4, 2) . '-' . substr($date, 6, 2) . ' ' .
-                                     substr($time, 0, 2) . ':' . substr($time, 2, 2) . ':' . substr($time, 4, 2);
+                        substr($time, 0, 2) . ':' . substr($time, 2, 2) . ':' . substr($time, 4, 2);
                 }
             }
             $size = $this->getFolderSize($b);
@@ -780,7 +780,7 @@ class ShipIt
             if (isset($postHooks[$taskName]) && count($postHooks[$taskName]) > 0) {
                 $details[] = count($postHooks[$taskName]) . " post-hook(s)";
             }
-            
+
             $suffix = !empty($details) ? " (" . implode(', ', $details) . ")" : "";
             echo "  " . ($index + 1) . ". " . $taskName . $suffix . "\n";
         }
@@ -1400,11 +1400,12 @@ INI;
             $phpPassed ? 'SUCCESS' : 'FAILURE',
             "Required: >= 8.1. Current: $phpVersion"
         ];
-        if (!$phpPassed) $allPassed = false;
+        if (!$phpPassed)
+            $allPassed = false;
 
         // 2. Disabled exec functions
         $requiredFuncs = ['exec', 'shell_exec', 'passthru'];
-        $disabledFuncs = array_filter($requiredFuncs, function($f) {
+        $disabledFuncs = array_filter($requiredFuncs, function ($f) {
             return !function_exists($f) || in_array($f, explode(',', ini_get('disable_functions')), true);
         });
         $funcsPassed = empty($disabledFuncs);
@@ -1414,7 +1415,8 @@ INI;
             $funcsPassed ? 'SUCCESS' : 'WARNING',
             $funcsPassed ? 'Required functions are enabled' : 'Disabled: ' . implode(', ', $disabledFuncs) . '. Deployment commands may fail.'
         ];
-        if (!$funcsPassed) $allPassed = false;
+        if (!$funcsPassed)
+            $allPassed = false;
 
         // 3. Git binary
         $gitPath = $this->findBinary('git');
@@ -1425,7 +1427,8 @@ INI;
             $gitPassed ? 'SUCCESS' : 'FAILURE',
             $gitPassed ? "Found at: $gitPath" : 'Not found in path. Install Git to enable cloning.'
         ];
-        if (!$gitPassed) $allPassed = false;
+        if (!$gitPassed)
+            $allPassed = false;
 
         // 4. Composer binary
         $composerPath = $this->findBinary('composer');
@@ -1455,7 +1458,8 @@ INI;
             $configExists ? 'SUCCESS' : 'FAILURE',
             $configExists ? 'Found .deploy/config.json' : 'Missing .deploy/config.json. Run "shipit init".'
         ];
-        if (!$configExists) $allPassed = false;
+        if (!$configExists)
+            $allPassed = false;
 
         // 7. DeployIgnore Check
         $ignoreExists = file_exists($this->rootDir . '/.deployignore');
@@ -1470,7 +1474,7 @@ INI;
         if ($configExists && !empty($this->config['gitRepoUrl'])) {
             $repoUrl = $this->config['gitRepoUrl'];
             $this->ui->info("Testing connection to Git repository: $repoUrl ...");
-            
+
             $connectionCmd = "GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND=\"ssh -o BatchMode=yes\" git ls-remote -h " . escapeshellarg($repoUrl) . " 2>&1";
             exec($connectionCmd, $output, $status);
 
@@ -1481,7 +1485,8 @@ INI;
                 $repoPassed ? 'SUCCESS' : 'FAILURE',
                 $repoPassed ? 'Authentication successful' : 'Connection failed. Verify SSH keys, repository URL, or access permissions.'
             ];
-            if (!$repoPassed) $allPassed = false;
+            if (!$repoPassed)
+                $allPassed = false;
         }
 
         $this->ui->table(
