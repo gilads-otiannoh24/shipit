@@ -1,5 +1,5 @@
 {
-    "name": "shipit/cli",
+    "name": "lipex-org/shipit-cli",
     "description": "A professional, modular CLI tool for PHP deployments",
     "type": "library",
     "license": "MIT",
