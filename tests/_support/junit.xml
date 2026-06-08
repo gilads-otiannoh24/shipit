@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="/home/ian/Desktop/Packages/shipit/phpunit.xml" tests="15" assertions="41" errors="0" failures="0" skipped="0" time="0.036233">
+    <testsuite name="Unit" tests="15" assertions="41" errors="0" failures="0" skipped="0" time="0.036233">
+      <testsuite name="ShipIt\Tests\BackupRotationTest" file="/home/ian/Desktop/Packages/shipit/tests/BackupRotationTest.php" tests="4" assertions="16" errors="0" failures="0" skipped="0" time="0.019391">
+        <testcase name="testRotateBackupsRetentionLimit" file="/home/ian/Desktop/Packages/shipit/tests/BackupRotationTest.php" line="60" class="ShipIt\Tests\BackupRotationTest" classname="ShipIt.Tests.BackupRotationTest" assertions="5" time="0.012570"/>
+        <testcase name="testTargetedRollback" file="/home/ian/Desktop/Packages/shipit/tests/BackupRotationTest.php" line="97" class="ShipIt\Tests\BackupRotationTest" classname="ShipIt.Tests.BackupRotationTest" assertions="4" time="0.004126">
+          <system-out>[36mℹ️  ⏭️  Skipped composer
+[0m[36mℹ️  ⏭️  Skipped npm
+[0m[36mℹ️  ⏭️  Skipped symlink
+[0m[36mℹ️  ⏭️  Skipped perms
+[0m  [1] backup_20260602_120000 (Created: 2026-06-04 21:22:38)
+  [2] backup_20260601_120000 (Created: 2026-06-04 20:22:38)
+[36mℹ️  ⏭️  Skipped composer
+[0m[36mℹ️  ⏭️  Skipped npm
+[0m[36mℹ️  ⏭️  Skipped symlink
+[0m[36mℹ️  ⏭️  Skipped perms
+[0m</system-out>
+        </testcase>
+        <testcase name="testTargetedRollbackChoice" file="/home/ian/Desktop/Packages/shipit/tests/BackupRotationTest.php" line="132" class="ShipIt\Tests\BackupRotationTest" classname="ShipIt.Tests.BackupRotationTest" assertions="2" time="0.001433">
+          <system-out>  [1] backup_20260602_120000 (Created: 2026-06-04 21:22:38)
+  [2] backup_20260601_120000 (Created: 2026-06-04 20:22:38)
+[36mℹ️  ⏭️  Skipped composer
+[0m[36mℹ️  ⏭️  Skipped npm
+[0m[36mℹ️  ⏭️  Skipped symlink
+[0m[36mℹ️  ⏭️  Skipped perms
+[0m</system-out>
+        </testcase>
+        <testcase name="testBackupEnvOption" file="/home/ian/Desktop/Packages/shipit/tests/BackupRotationTest.php" line="161" class="ShipIt\Tests\BackupRotationTest" classname="ShipIt.Tests.BackupRotationTest" assertions="5" time="0.001262">
+          <system-out>[36mℹ️  ⏭️  Skipped composer
+[0m[36mℹ️  ⏭️  Skipped npm
+[0m[36mℹ️  ⏭️  Skipped symlink
+[0m[36mℹ️  ⏭️  Skipped perms
+[0m</system-out>
+        </testcase>
+      </testsuite>
+      <testsuite name="ShipIt\Tests\CI4AdapterTest" file="/home/ian/Desktop/Packages/shipit/tests/CI4AdapterTest.php" tests="3" assertions="10" errors="0" failures="0" skipped="0" time="0.007485">
+        <testcase name="testGetWritablePaths" file="/home/ian/Desktop/Packages/shipit/tests/CI4AdapterTest.php" line="43" class="ShipIt\Tests\CI4AdapterTest" classname="ShipIt.Tests.CI4AdapterTest" assertions="1" time="0.001124"/>
+        <testcase name="testPostHooksInitializeWritableDirectories" file="/home/ian/Desktop/Packages/shipit/tests/CI4AdapterTest.php" line="52" class="ShipIt\Tests\CI4AdapterTest" classname="ShipIt.Tests.CI4AdapterTest" assertions="8" time="0.004927"/>
+        <testcase name="testPostHooksSkipIfWritableDirectoriesExist" file="/home/ian/Desktop/Packages/shipit/tests/CI4AdapterTest.php" line="73" class="ShipIt\Tests\CI4AdapterTest" classname="ShipIt.Tests.CI4AdapterTest" assertions="1" time="0.001434"/>
+      </testsuite>
+      <testsuite name="ShipIt\Tests\FilesystemTest" file="/home/ian/Desktop/Packages/shipit/tests/FilesystemTest.php" tests="3" assertions="8" errors="0" failures="0" skipped="0" time="0.005341">
+        <testcase name="testParseDeployIgnore" file="/home/ian/Desktop/Packages/shipit/tests/FilesystemTest.php" line="36" class="ShipIt\Tests\FilesystemTest" classname="ShipIt.Tests.FilesystemTest" assertions="1" time="0.002898"/>
+        <testcase name="testCopyFolderRespectsIgnores" file="/home/ian/Desktop/Packages/shipit/tests/FilesystemTest.php" line="51" class="ShipIt\Tests\FilesystemTest" classname="ShipIt.Tests.FilesystemTest" assertions="4" time="0.001392"/>
+        <testcase name="testClearDirectory" file="/home/ian/Desktop/Packages/shipit/tests/FilesystemTest.php" line="74" class="ShipIt\Tests\FilesystemTest" classname="ShipIt.Tests.FilesystemTest" assertions="3" time="0.001051"/>
+      </testsuite>
+      <testsuite name="ShipIt\Tests\TaskRunnerTest" file="/home/ian/Desktop/Packages/shipit/tests/TaskRunnerTest.php" tests="5" assertions="7" errors="0" failures="0" skipped="0" time="0.004016">
+        <testcase name="testAddTaskAndRun" file="/home/ian/Desktop/Packages/shipit/tests/TaskRunnerTest.php" line="23" class="ShipIt\Tests\TaskRunnerTest" classname="ShipIt.Tests.TaskRunnerTest" assertions="1" time="0.000645"/>
+        <testcase name="testPreAndPostHooks" file="/home/ian/Desktop/Packages/shipit/tests/TaskRunnerTest.php" line="34" class="ShipIt\Tests\TaskRunnerTest" classname="ShipIt.Tests.TaskRunnerTest" assertions="1" time="0.000607"/>
+        <testcase name="testMergeRunOrderPrependAppend" file="/home/ian/Desktop/Packages/shipit/tests/TaskRunnerTest.php" line="53" class="ShipIt\Tests\TaskRunnerTest" classname="ShipIt.Tests.TaskRunnerTest" assertions="1" time="0.000497"/>
+        <testcase name="testMergeRunOrderBeforeAfter" file="/home/ian/Desktop/Packages/shipit/tests/TaskRunnerTest.php" line="66" class="ShipIt\Tests\TaskRunnerTest" classname="ShipIt.Tests.TaskRunnerTest" assertions="1" time="0.000378"/>
+        <testcase name="testSkipAndOnlyFilters" file="/home/ian/Desktop/Packages/shipit/tests/TaskRunnerTest.php" line="83" class="ShipIt\Tests\TaskRunnerTest" classname="ShipIt.Tests.TaskRunnerTest" assertions="3" time="0.001889"/>
+      </testsuite>
+    </testsuite>
+  </testsuite>
+</testsuites>

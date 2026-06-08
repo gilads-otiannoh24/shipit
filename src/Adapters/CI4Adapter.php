@@ -25,7 +25,20 @@ class CI4Adapter implements AdapterInterface
 
     public function getPostHooks(): array
     {
-        return [];
+        $writablePaths = $this->getWritablePaths();
+        return [
+            'update' => [
+                function (ShipIt $shipIt) use ($writablePaths) {
+                    $rootDir = $shipIt->getRootDir();
+                    foreach ($writablePaths as $dir) {
+                        $fullPath = $rootDir . '/' . $dir;
+                        if (!is_dir($fullPath)) {
+                            $shipIt->runCommand("Init CI4 Writable Folder ($dir)", "mkdir -p " . escapeshellarg($fullPath), true);
+                        }
+                    }
+                }
+            ]
+        ];
     }
 
     public function getWritablePaths(): array

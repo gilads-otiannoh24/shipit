@@ -26,6 +26,11 @@ class TerminalUI
         echo $this->color("ℹ️  " . $msg . "\n", "\033[36m");
     }
 
+    public function warning(string $msg): void
+    {
+        echo $this->color("⚠️  " . $msg . "\n", "\033[33m");
+    }
+
     public function table(array $headers, array $rows): void
     {
         $colWidths = [];

@@ -1,5 +1,5 @@
 {
-    "name": "gilads-otiannoh254/shipit",
+    "name": "shipit/cli",
     "description": "A professional, modular CLI tool for PHP deployments",
     "type": "library",
     "license": "MIT",
@@ -16,7 +16,8 @@
     ],
     "autoload-dev": {
         "psr-4": {
-            "ShipIt\\Tests\\": "tests/"
+            "ShipIt\\Tests\\": "tests/",
+            "ShipIt\\Tests\\Support\\": "tests/_support"
         }
     },
     "minimum-stability": "stable",

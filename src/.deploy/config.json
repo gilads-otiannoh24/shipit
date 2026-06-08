@@ -1,0 +1,33 @@
+{
+    "adapter": null,
+    "server": null,
+    "gitRepoUrl": "",
+    "branch": "main",
+    "user": "admin",
+    "group": "admin",
+    "ownership": [
+        "public",
+        "public_html",
+        "private_html"
+    ],
+    "symlinks": [
+        [
+            "public",
+            "public_html"
+        ],
+        [
+            "public_html",
+            "private_html"
+        ]
+    ],
+    "writable": [
+        ".tempest",
+        "storage",
+        "bootstrap\/cache",
+        "writable"
+    ],
+    "backup_path": "\/home\/ian\/Desktop\/Packages\/domain_backups\/src",
+    "backup_retention": 5,
+    "backup_env": true,
+    "last_shipped_at": null
+}

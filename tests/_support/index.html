@@ -1,0 +1,1524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShipIt Deployment & Test Sandbox</title>
+    <!-- Google Fonts: Outfit and Fira Code -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-base: hsl(222, 24%, 8%);
+            --bg-surface: hsl(222, 24%, 12%);
+            --bg-surface-elevated: hsl(222, 24%, 16%);
+            --border-color: hsl(222, 20%, 22%);
+            --border-hover: hsl(222, 20%, 32%);
+            
+            --text-primary: hsl(0, 0%, 94%);
+            --text-secondary: hsl(222, 12%, 65%);
+            --text-muted: hsl(222, 12%, 45%);
+            
+            --accent-primary: hsl(267, 100%, 65%);
+            --accent-primary-hover: hsl(267, 100%, 72%);
+            --accent-primary-glow: hsla(267, 100%, 65%, 0.15);
+            
+            --accent-teal: hsl(175, 100%, 42%);
+            --accent-teal-glow: hsla(175, 100%, 42%, 0.15);
+            
+            --success: hsl(145, 80%, 45%);
+            --success-glow: hsla(145, 80%, 45%, 0.15);
+            
+            --error: hsl(350, 80%, 55%);
+            --error-glow: hsla(350, 80%, 55%, 0.15);
+            
+            --warning: hsl(38, 95%, 55%);
+            --warning-glow: hsla(38, 95%, 55%, 0.15);
+            
+            --font-main: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            --font-mono: 'Fira Code', monospace;
+            
+            --radius-sm: 6px;
+            --radius-md: 12px;
+            --radius-lg: 20px;
+            
+            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
+            
+            --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            font-family: var(--font-main);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 10% 20%, hsla(267, 100%, 65%, 0.04) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, hsla(175, 100%, 42%, 0.04) 0%, transparent 40%);
+            background-attachment: fixed;
+        }
+
+        /* Layout Grid */
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 2rem;
+            gap: 2rem;
+        }
+
+        /* Header */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .header-title-area h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--text-primary) 30%, var(--accent-primary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .header-title-area h1 span.badge {
+            font-size: 0.8rem;
+            padding: 0.2rem 0.6rem;
+            background: var(--accent-primary-glow);
+            border: 1px solid var(--accent-primary);
+            color: var(--accent-primary-hover);
+            border-radius: 20px;
+            vertical-align: middle;
+            -webkit-text-fill-color: var(--accent-primary-hover);
+        }
+
+        .header-title-area p {
+            color: var(--text-secondary);
+            font-size: 1rem;
+            margin-top: 0.25rem;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 1rem;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.25rem;
+            border-radius: var(--radius-md);
+            font-family: var(--font-main);
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition-fast);
+            border: 1px solid transparent;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background-color: var(--accent-primary);
+            color: white;
+            box-shadow: 0 4px 12px var(--accent-primary-glow);
+        }
+        .btn-primary:hover {
+            background-color: var(--accent-primary-hover);
+            transform: translateY(-1px);
+        }
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background-color: var(--bg-surface-elevated);
+            color: var(--text-primary);
+            border-color: var(--border-color);
+        }
+        .btn-secondary:hover {
+            border-color: var(--border-hover);
+            background-color: hsl(222, 24%, 20%);
+        }
+
+        .btn-accent-teal {
+            background-color: var(--accent-teal-glow);
+            color: var(--accent-teal);
+            border-color: var(--accent-teal);
+        }
+        .btn-accent-teal:hover {
+            background-color: var(--accent-teal);
+            color: var(--bg-base);
+        }
+
+        .btn-danger {
+            background-color: var(--error-glow);
+            color: var(--error);
+            border-color: var(--error);
+        }
+        .btn-danger:hover {
+            background-color: var(--error);
+            color: white;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        /* 3-Column Dashboard Layout */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+            align-items: stretch;
+        }
+
+        @media (max-width: 1200px) {
+            .dashboard-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Card styles */
+        .card {
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            display: flex;
+            flex-direction: column;
+            box-shadow: var(--shadow-md);
+            transition: var(--transition-smooth);
+            overflow: hidden;
+        }
+
+        .card:hover {
+            border-color: var(--border-hover);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .card-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-title {
+            font-size: 1.15rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card-title svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .card-content {
+            padding: 1.5rem;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        /* Directory / Tree View UI */
+        .file-tree {
+            background-color: var(--bg-base);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .tree-item {
+            padding: 0.25rem 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            padding-left: 0.5rem;
+            padding-right: 0.5rem;
+            transition: var(--transition-fast);
+        }
+
+        .tree-item:hover {
+            background-color: var(--bg-surface-elevated);
+        }
+
+        .tree-item-name {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .tree-item-meta {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        .tree-folder {
+            font-weight: 500;
+            color: var(--accent-primary-hover);
+        }
+
+        .tree-file {
+            color: var(--text-primary);
+        }
+
+        .tree-ignored {
+            color: var(--text-muted);
+            opacity: 0.6;
+            text-decoration: line-through;
+        }
+
+        /* Git Log Timeline */
+        .git-log-container {
+            background-color: var(--bg-base);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            max-height: 200px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .commit-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+            padding-left: 0.75rem;
+            border-left: 2px solid var(--accent-primary);
+            position: relative;
+        }
+
+        .commit-item::before {
+            content: '';
+            position: absolute;
+            left: -5px;
+            top: 2px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--accent-primary);
+            border: 2px solid var(--bg-base);
+        }
+
+        .commit-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .commit-hash {
+            font-family: var(--font-mono);
+            color: var(--accent-primary-hover);
+            font-weight: 500;
+        }
+
+        .commit-msg {
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        /* Terminal Console */
+        .terminal-console {
+            background-color: hsl(222, 24%, 4%);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: hsl(120, 100%, 85%);
+            height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            box-shadow: inset 0 4px 12px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column-reverse;
+        }
+
+        /* Backups rotation UI */
+        .backups-timeline {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+
+        .backup-card {
+            background-color: var(--bg-surface-elevated);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 0.75rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: var(--transition-fast);
+        }
+
+        .backup-card:hover {
+            border-color: var(--border-hover);
+        }
+
+        .backup-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .backup-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--accent-teal);
+            font-family: var(--font-mono);
+        }
+
+        .backup-date {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .backup-warning {
+            font-size: 0.7rem;
+            color: var(--warning);
+            font-weight: 500;
+            margin-top: 0.15rem;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        /* Form Controls */
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        label {
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        input[type="text"], textarea, select {
+            background-color: var(--bg-base);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 0.6rem 0.8rem;
+            color: var(--text-primary);
+            font-family: var(--font-main);
+            font-size: 0.9rem;
+            transition: var(--transition-fast);
+        }
+
+        input[type="text"]:focus, textarea:focus, select:focus {
+            border-color: var(--accent-primary);
+            outline: none;
+            box-shadow: 0 0 0 2px var(--accent-primary-glow);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        /* Test suite panel */
+        .test-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.75rem;
+        }
+
+        .test-metric-card {
+            background-color: var(--bg-base);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 0.75rem;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .test-metric-val {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .test-metric-lbl {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .suites-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+
+        .suite-item {
+            background-color: var(--bg-surface-elevated);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            transition: var(--transition-fast);
+        }
+
+        .suite-header {
+            padding: 0.75rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .suite-header:hover {
+            background-color: hsl(222, 24%, 20%);
+        }
+
+        .suite-title {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .suite-stats {
+            display: flex;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+        }
+
+        .suite-cases {
+            padding: 0.75rem 1rem;
+            background-color: var(--bg-base);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .case-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            font-size: 0.8rem;
+            padding: 0.25rem 0;
+        }
+
+        .case-name {
+            font-family: var(--font-mono);
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .case-time {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        .case-failure-msg {
+            background-color: var(--error-glow);
+            border: 1px solid var(--error);
+            color: var(--error);
+            border-radius: var(--radius-sm);
+            padding: 0.5rem;
+            margin-top: 0.25rem;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* Status Indicators */
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-passed { background-color: var(--success); box-shadow: 0 0 8px var(--success); }
+        .status-failed { background-color: var(--error); box-shadow: 0 0 8px var(--error); }
+        .status-error { background-color: var(--error); box-shadow: 0 0 8px var(--error); }
+        .status-warning { background-color: var(--warning); box-shadow: 0 0 8px var(--warning); }
+        .status-info { background-color: var(--accent-teal); box-shadow: 0 0 8px var(--accent-teal); }
+        .status-muted { background-color: var(--text-muted); }
+
+        /* Floating File Viewer Modal */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+
+        .modal.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-card {
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            width: 90%;
+            max-width: 800px;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: var(--shadow-lg);
+            transform: scale(0.95);
+            transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .modal.active .modal-card {
+            transform: scale(1);
+        }
+
+        .modal-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-weight: 600;
+            font-size: 1.2rem;
+            font-family: var(--font-mono);
+        }
+
+        .modal-content {
+            padding: 1.5rem;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .modal-actions {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: var(--transition-fast);
+        }
+
+        .close-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .modal-code {
+            width: 100%;
+            height: 350px;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            background-color: var(--bg-base);
+            border: 1px solid var(--border-color);
+            color: hsl(120, 100%, 85%);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+        }
+
+        /* Flow animation indicators */
+        .flow-indicators {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--bg-surface-elevated);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .flow-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.25rem;
+            flex: 1;
+            position: relative;
+        }
+
+        .flow-step:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            right: -50%;
+            top: 12px;
+            width: 100%;
+            height: 2px;
+            background: var(--border-color);
+            z-index: 1;
+        }
+
+        .flow-step.active:not(:last-child)::after {
+            background: var(--accent-primary);
+        }
+
+        .flow-dot {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: var(--bg-base);
+            border: 2px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: bold;
+            z-index: 2;
+            transition: var(--transition-smooth);
+        }
+
+        .flow-step.active .flow-dot {
+            border-color: var(--accent-primary);
+            background: var(--accent-primary-glow);
+            color: var(--accent-primary-hover);
+            box-shadow: 0 0 12px var(--accent-primary);
+        }
+
+        .flow-step.completed .flow-dot {
+            border-color: var(--accent-teal);
+            background: var(--accent-teal-glow);
+            color: var(--accent-teal);
+            box-shadow: 0 0 12px var(--accent-teal);
+        }
+
+        .flow-lbl {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .flow-step.active .flow-lbl {
+            color: var(--text-primary);
+        }
+
+        /* Notifications */
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background-color: var(--bg-surface-elevated);
+            border-left: 4px solid var(--accent-primary);
+            box-shadow: var(--shadow-lg);
+            border-radius: var(--radius-sm);
+            padding: 1rem 1.5rem;
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: var(--transition-smooth);
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <header>
+        <div class="header-title-area">
+            <h1>ShipIt Sandbox Visualizer <span class="badge">PHP & Git Deployment</span></h1>
+            <p>Simulate local Git repository, ignore filtering, backup rotation, rollbacks, and test executions.</p>
+        </div>
+        <div class="header-actions">
+            <button id="btn-init-sandbox" class="btn btn-secondary" onclick="initSandbox()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                Init/Reset Sandbox
+            </button>
+            <button id="btn-run-tests" class="btn btn-accent-teal" onclick="runTests()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                Run PHPUnit Suite
+            </button>
+        </div>
+    </header>
+
+    <!-- Flow Simulation Bar -->
+    <div class="flow-indicators">
+        <div class="flow-step" id="flow-backup">
+            <div class="flow-dot">1</div>
+            <div class="flow-lbl">Rotational Backup</div>
+        </div>
+        <div class="flow-step" id="flow-clone">
+            <div class="flow-dot">2</div>
+            <div class="flow-lbl">Git Clone Repo</div>
+        </div>
+        <div class="flow-step" id="flow-filter">
+            <div class="flow-dot">3</div>
+            <div class="flow-lbl">Filter Ignores</div>
+        </div>
+        <div class="flow-step" id="flow-adapter">
+            <div class="flow-dot">4</div>
+            <div class="flow-lbl">Adapter Hooks</div>
+        </div>
+        <div class="flow-step" id="flow-permissions">
+            <div class="flow-dot">5</div>
+            <div class="flow-lbl">Chmod & Chown</div>
+        </div>
+    </div>
+
+    <!-- Main Grid -->
+    <div class="dashboard-grid">
+        
+        <!-- Column 1: Git Repository & Workspace Sandbox -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-git-branch"><line x1="6" y1="3" x2="6" y2="15"></line><circle cx="18" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path></svg>
+                    Git Repository Sandbox (Source)
+                </span>
+                <span class="status-dot status-info" id="repo-status-indicator"></span>
+            </div>
+            <div class="card-content">
+                <div class="form-group">
+                    <label>Workspace Files (Click to View/Edit)</label>
+                    <div class="file-tree" id="repo-file-tree">
+                        <!-- Populated by script -->
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Git Log (Latest commits)</label>
+                    <div class="git-log-container" id="git-log-list">
+                        <!-- Populated by script -->
+                    </div>
+                </div>
+
+                <!-- Form to edit files and commit -->
+                <div style="border-top: 1px solid var(--border-color); padding-top: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                    <div class="card-title" style="font-size: 0.95rem;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                        Mock File Modification
+                    </div>
+                    <div class="form-group">
+                        <label>Select File</label>
+                        <select id="edit-filename" onchange="onSelectFileToEdit()">
+                            <option value="index.php">index.php</option>
+                            <option value="style.css">style.css</option>
+                            <option value=".deployignore">.deployignore</option>
+                            <option value="composer.json">composer.json</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Content</label>
+                        <textarea id="edit-content" style="font-family: var(--font-mono); font-size: 0.8rem;"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Commit Message</label>
+                        <input type="text" id="edit-commit-msg" value="Update mock code files">
+                    </div>
+                    <button class="btn btn-secondary" onclick="modifyAndCommitFile()">Commit Changes to Git</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Column 2: ShipIt Orchestrator Engine & Backups -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-cpu"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="15" x2="23" y2="15"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="15" x2="4" y2="15"></line></svg>
+                    ShipIt Engine Control
+                </span>
+                <span class="status-dot status-warning" id="engine-status-indicator"></span>
+            </div>
+            <div class="card-content">
+                <div style="display: flex; gap: 0.75rem;">
+                    <button class="btn btn-primary" style="flex: 1;" onclick="triggerDeploy()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5l-5-5-5 5"/></svg>
+                        Run Deployment
+                    </button>
+                    <button class="btn btn-danger" style="flex: 1;" onclick="triggerRollback()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8m0-5v5h5"/></svg>
+                        Rollback
+                    </button>
+                </div>
+
+                <div class="form-group">
+                    <label>Terminal Activity Logs</label>
+                    <div class="terminal-console" id="console-logs">
+                        <!-- console messages -->
+                    </div>
+                </div>
+
+                <div class="form-group" style="border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                    <label>Active Configuration (Overrides)</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                        <div class="form-group">
+                            <label>Backup Retention</label>
+                            <input type="text" id="config-retention" value="3" onchange="updateConfigSettings()">
+                        </div>
+                        <div class="form-group">
+                            <label>Active Adapter</label>
+                            <select id="config-adapter" onchange="updateConfigSettings()">
+                                <option value="vite">Vite Adapter</option>
+                                <option value="laravel">Laravel Adapter</option>
+                                <option value="ci4">CodeIgniter 4 Adapter</option>
+                                <option value="">None (Standard)</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="grid-column: span 2;">
+                            <label>Backup Environment File (.env)</label>
+                            <select id="config-backup-env" onchange="updateConfigSettings()">
+                                <option value="true">Yes, back up .env (Default)</option>
+                                <option value="false">No, ignore .env and preserve live file</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group" style="border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                        <label>Rotated Backups Timeline</label>
+                        <span class="tree-item-meta" id="backup-count-badge">0 Backups</span>
+                    </div>
+                    <div class="backups-timeline" id="backups-list">
+                        <!-- Populated by script -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Column 3: Live Server Target & Test Runner -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-server"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                    Live Target (example.com)
+                </span>
+                <span class="status-dot status-passed" id="live-status-indicator"></span>
+            </div>
+            <div class="card-content">
+                <div class="form-group">
+                    <label>Live Directory Structure (Protected Environment)</label>
+                    <div class="file-tree" id="live-file-tree">
+                        <!-- Populated by script -->
+                    </div>
+                </div>
+
+                <div class="form-group" style="border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                    <label>PHPUnit Test Suites Runner</label>
+                    <div class="test-summary-grid">
+                        <div class="test-metric-card" style="border-color: var(--accent-teal)">
+                            <div class="test-metric-val" id="test-total">0</div>
+                            <div class="test-metric-lbl">Tests</div>
+                        </div>
+                        <div class="test-metric-card" style="border-color: var(--success)">
+                            <div class="test-metric-val" id="test-passed" style="color: var(--success)">0</div>
+                            <div class="test-metric-lbl">Passed</div>
+                        </div>
+                        <div class="test-metric-card" style="border-color: var(--error)">
+                            <div class="test-metric-val" id="test-failed" style="color: var(--error)">0</div>
+                            <div class="test-metric-lbl">Failed</div>
+                        </div>
+                        <div class="test-metric-card">
+                            <div class="test-metric-val" id="test-errors">0</div>
+                            <div class="test-metric-lbl">Errors</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Test Suite Breakdown</label>
+                    <div class="suites-list" id="test-suites-list">
+                        <div style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 2rem;">
+                            No test results loaded. Click "Run PHPUnit Suite" to execute test assertions.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Modal File Code Editor/Viewer -->
+<div class="modal" id="file-modal">
+    <div class="modal-card">
+        <div class="modal-header">
+            <span class="modal-title" id="modal-filename">/index.php</span>
+            <button class="close-btn" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-content">
+            <textarea class="modal-code" id="modal-code-area" readonly></textarea>
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast notifications -->
+<div class="toast" id="toast-notif">
+    <span class="status-dot status-info" id="toast-indicator"></span>
+    <span id="toast-message">Notification message here</span>
+</div>
+
+<script>
+    const API_URL = 'api.php';
+    let currentData = null;
+
+    // Load initial states
+    document.addEventListener("DOMContentLoaded", () => {
+        refreshStatus();
+    });
+
+    async function refreshStatus() {
+        try {
+            const response = await fetch(`${API_URL}?action=status`);
+            const data = await response.json();
+            currentData = data;
+
+            if (data.success) {
+                if (!data.sandbox_initialized) {
+                    showToast("Sandbox not initialized. Initializing automatically...", "info");
+                    await initSandbox();
+                    return;
+                }
+                
+                document.getElementById('repo-status-indicator').className = "status-dot status-passed";
+                document.getElementById('live-status-indicator').className = "status-dot status-passed";
+                document.getElementById('engine-status-indicator').className = "status-dot status-passed";
+
+                // Populate file trees
+                renderFileTree(data.repo_files, 'repo-file-tree', true);
+                renderFileTree(data.example_files, 'live-file-tree', false);
+
+                // Update configuration inputs
+                if (data.config) {
+                    document.getElementById('config-retention').value = data.config.backup_retention;
+                    document.getElementById('config-adapter').value = data.config.adapter || '';
+                    document.getElementById('config-backup-env').value = data.config.backup_env !== false ? 'true' : 'false';
+                }
+
+                // Render Git logs
+                renderGitLog(data.git_log);
+
+                // Render backups list
+                renderBackups(data.backups, data.config ? data.config.backup_retention : 3);
+
+                // Render tests
+                if (data.tests) {
+                    renderTests(data.tests);
+                }
+            }
+        } catch (error) {
+            console.error("Error fetching status:", error);
+            showToast("Failed to connect to API server.", "error");
+        }
+    }
+
+    async function initSandbox() {
+        showToast("Initializing Sandbox environment...", "info");
+        document.getElementById('console-logs').innerHTML = `<div style="color: var(--accent-teal)">[SYSTEM] Initializing repository & server directories...</div>`;
+        
+        try {
+            const response = await fetch(`${API_URL}?action=init_sandbox`, { method: 'POST' });
+            const data = await response.json();
+            if (data.success) {
+                showToast("Sandbox initialized successfully!", "success");
+                addLog("[SYSTEM] Sandbox setup complete.\n[SYSTEM] Repository: /tests/_support/repo (Git main)\n[SYSTEM] Live Site: /tests/_support/example.com");
+                await refreshStatus();
+                // Load default text to editor
+                onSelectFileToEdit();
+            } else {
+                showToast("Initialization failed: " + data.error, "error");
+            }
+        } catch (e) {
+            showToast("Error initializing: " + e.message, "error");
+        }
+    }
+
+    async function triggerDeploy() {
+        setFlowActive("backup");
+        showToast("Running ShipIt Deployment...", "info");
+        addLog("\n[DEPLOY] Running 'shipit' sequence...");
+        
+        try {
+            const response = await fetch(`${API_URL}?action=run_deploy`, { method: 'POST' });
+            const data = await response.json();
+            
+            // Advance steps in UI for demo effect
+            setTimeout(() => setFlowActive("clone"), 400);
+            setTimeout(() => setFlowActive("filter"), 800);
+            setTimeout(() => setFlowActive("adapter"), 1200);
+            setTimeout(() => setFlowActive("permissions"), 1600);
+
+            setTimeout(async () => {
+                clearFlow();
+                if (data.success) {
+                    showToast("Deployment finished successfully!", "success");
+                    addLog(data.output);
+                    await refreshStatus();
+                } else {
+                    showToast("Deployment failed!", "error");
+                    addLog(data.output);
+                }
+            }, 2000);
+        } catch (e) {
+            clearFlow();
+            showToast("Network error running deploy: " + e.message, "error");
+        }
+    }
+
+    async function triggerRollback(target = '') {
+        setFlowActive("backup"); // Marks beginning
+        showToast(`Running Rollback ${target ? `to ${target}` : ''}...`, "info");
+        addLog(`\n[ROLLBACK] Running 'shipit rollback ${target}'...`);
+
+        try {
+            const formData = new FormData();
+            formData.append('target', target);
+            
+            const response = await fetch(`${API_URL}?action=run_rollback`, {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+            
+            setTimeout(() => setFlowActive("filter"), 600);
+            setTimeout(() => setFlowActive("adapter"), 1200);
+
+            setTimeout(async () => {
+                clearFlow();
+                if (data.success) {
+                    showToast("Rollback completed successfully!", "success");
+                    addLog(data.output);
+                    await refreshStatus();
+                } else {
+                    showToast("Rollback failed!", "error");
+                    addLog(data.output);
+                }
+            }, 1800);
+        } catch (e) {
+            clearFlow();
+            showToast("Network error running rollback: " + e.message, "error");
+        }
+    }
+
+    async function runTests() {
+        showToast("Executing PHPUnit test suites...", "info");
+        const btn = document.getElementById("btn-run-tests");
+        btn.disabled = true;
+        btn.innerText = "Running Test Suites...";
+
+        try {
+            const response = await fetch(`${API_URL}?action=run_tests`, { method: 'POST' });
+            const data = await response.json();
+            btn.disabled = false;
+            btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Run PHPUnit Suite`;
+
+            if (data.success) {
+                if (data.test_success) {
+                    showToast("PHPUnit passed successfully!", "success");
+                } else {
+                    showToast("PHPUnit failed. Review assertion details.", "error");
+                }
+                addLog("\n[PHPUNIT] Test run results:\n" + data.output);
+                await refreshStatus();
+            } else {
+                showToast("PHPUnit error: " + data.error, "error");
+            }
+        } catch (e) {
+            btn.disabled = false;
+            btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Run PHPUnit Suite`;
+            showToast("Failed to execute tests: " + e.message, "error");
+        }
+    }
+
+    async function modifyAndCommitFile() {
+        const filename = document.getElementById('edit-filename').value;
+        const content = document.getElementById('edit-content').value;
+        const commitMsg = document.getElementById('edit-commit-msg').value;
+
+        showToast(`Committing file modification: ${filename}...`, "info");
+
+        try {
+            const formData = new FormData();
+            formData.append('filename', filename);
+            formData.append('content', content);
+            formData.append('commit_msg', commitMsg);
+
+            const response = await fetch(`${API_URL}?action=modify_git_file`, {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+            if (data.success) {
+                showToast(`Committed change to ${filename}`, "success");
+                addLog(`\n[GIT] Committed change:\n${data.output}`);
+                await refreshStatus();
+            } else {
+                showToast("Git commit failed: " + data.output, "error");
+            }
+        } catch (e) {
+            showToast("Error committing: " + e.message, "error");
+        }
+    }
+
+    async function updateConfigSettings() {
+        const retention = parseInt(document.getElementById('config-retention').value) || 3;
+        const adapter = document.getElementById('config-adapter').value;
+        const backupEnv = document.getElementById('config-backup-env').value === 'true';
+
+        try {
+            const response = await fetch(`${API_URL}?action=update_config`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    backup_retention: retention,
+                    adapter: adapter,
+                    backup_env: backupEnv
+                })
+            });
+            const data = await response.json();
+            if (data.success) {
+                showToast("Updated Sandbox config.json overrides", "success");
+                addLog(`[SYSTEM] Config overrides saved: retention=${retention}, adapter=${adapter || 'none'}, backup_env=${backupEnv}`);
+                await refreshStatus();
+            }
+        } catch (e) {
+            showToast("Error updating config: " + e.message, "error");
+        }
+    }
+
+    function renderFileTree(files, containerId, isRepo = true) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = '';
+        
+        if (files.length === 0) {
+            container.innerHTML = '<div style="color: var(--text-muted); font-style: italic;">Directory is empty</div>';
+            return;
+        }
+
+        const buildTreeHtml = (items) => {
+            let html = '<div style="padding-left: 0.5rem">';
+            items.forEach(item => {
+                if (item.is_dir) {
+                    if (item.ignored) {
+                        html += `
+                            <div class="tree-item">
+                                <span class="tree-item-name tree-ignored">
+                                    📁 ${item.name}/
+                                </span>
+                                <span class="tree-item-meta">Ignored</span>
+                            </div>
+                        `;
+                    } else {
+                        html += `
+                            <div class="tree-item tree-folder">
+                                <span class="tree-item-name">
+                                    📁 ${item.name}/
+                                </span>
+                            </div>
+                            ${buildTreeHtml(item.children)}
+                        `;
+                    }
+                } else {
+                    const sizeKB = (item.size / 1024).toFixed(2);
+                    const safeName = item.name.replace(/'/g, "\\'");
+                    const escapedContent = item.content ? item.content.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") : '';
+                    
+                    html += `
+                        <div class="tree-item" onclick="openFileViewer('${safeName}', \`${escapedContent}\`)">
+                            <span class="tree-item-name tree-file">
+                                📄 ${item.name}
+                            </span>
+                            <span class="tree-item-meta">${sizeKB} KB</span>
+                        </div>
+                    `;
+                }
+            });
+            html += '</div>';
+            return html;
+        };
+
+        container.innerHTML = buildTreeHtml(files);
+    }
+
+    function renderGitLog(logs) {
+        const container = document.getElementById('git-log-list');
+        container.innerHTML = '';
+        
+        if (logs.length === 0) {
+            container.innerHTML = '<div style="color: var(--text-muted); font-style: italic; font-size: 0.85rem;">No git logs found.</div>';
+            return;
+        }
+
+        logs.forEach(log => {
+            const item = document.createElement('div');
+            item.className = 'commit-item';
+            item.innerHTML = `
+                <div class="commit-header">
+                    <span class="commit-hash">${log.hash}</span>
+                    <span>${log.date} by ${log.author}</span>
+                </div>
+                <div class="commit-msg">${log.subject}</div>
+            `;
+            container.appendChild(item);
+        });
+    }
+
+    function renderBackups(backups, retentionLimit) {
+        const container = document.getElementById('backups-list');
+        container.innerHTML = '';
+        
+        document.getElementById('backup-count-badge').innerText = `${backups.length} Backups`;
+
+        if (backups.length === 0) {
+            container.innerHTML = '<div style="color: var(--text-muted); font-style: italic; font-size: 0.85rem; text-align: center; padding: 1.5rem;">No backups currently archived.</div>';
+            return;
+        }
+
+        backups.forEach((b, index) => {
+            const isPruned = index >= retentionLimit;
+            const item = document.createElement('div');
+            item.className = 'backup-card';
+            
+            let warningHtml = '';
+            if (isPruned) {
+                warningHtml = `<div class="backup-warning"><span class="status-dot status-warning"></span> Pruned next deploy (Retention: ${retentionLimit})</div>`;
+            }
+
+            item.innerHTML = `
+                <div class="backup-info">
+                    <span class="backup-name">${b.name}</span>
+                    <span class="backup-date">Created: ${b.created_at}</span>
+                    ${warningHtml}
+                </div>
+                <button class="btn btn-secondary btn-accent-teal" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="triggerRollback('${b.name}')">
+                    Restore
+                </button>
+            `;
+            container.appendChild(item);
+        });
+    }
+
+    function renderTests(tests) {
+        document.getElementById('test-total').innerText = tests.total;
+        document.getElementById('test-passed').innerText = tests.passed;
+        document.getElementById('test-failed').innerText = tests.failed;
+        document.getElementById('test-errors').innerText = tests.errors;
+
+        const container = document.getElementById('test-suites-list');
+        container.innerHTML = '';
+
+        if (!tests.suites || tests.suites.length === 0) {
+            container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 2rem;">No test suites ran.</div>';
+            return;
+        }
+
+        tests.suites.forEach((suite, index) => {
+            const item = document.createElement('div');
+            item.className = 'suite-item';
+            
+            const hasFailed = suite.failed > 0 || suite.errors > 0;
+            const statusClass = hasFailed ? 'status-failed' : 'status-passed';
+            
+            let casesHtml = '';
+            suite.cases.forEach(c => {
+                const casePassed = c.status === 'passed';
+                const caseDot = casePassed ? 'status-passed' : 'status-failed';
+                let failDetail = '';
+                if (!casePassed) {
+                    failDetail = `<div class="case-failure-msg">${c.message}</div>`;
+                }
+                
+                casesHtml += `
+                    <div style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
+                        <div class="case-item">
+                            <span class="case-name">
+                                <span class="status-dot ${caseDot}"></span> ${c.name}
+                            </span>
+                            <span class="case-time">${c.time.toFixed(4)}s</span>
+                        </div>
+                        ${failDetail}
+                    </div>
+                `;
+            });
+
+            item.innerHTML = `
+                <div class="suite-header" onclick="toggleSuiteDetails(${index})">
+                    <span class="suite-title">
+                        <span class="status-dot ${statusClass}"></span>
+                        ${suite.name.split('\\').pop()}
+                    </span>
+                    <span class="suite-stats">
+                        <span style="color: var(--success)">Passed: ${suite.passed}</span>
+                        ${suite.failed > 0 ? `<span style="color: var(--error)">Failed: ${suite.failed}</span>` : ''}
+                    </span>
+                </div>
+                <div class="suite-cases" id="suite-cases-${index}" style="display: none;">
+                    ${casesHtml}
+                </div>
+            `;
+            container.appendChild(item);
+        });
+    }
+
+    function toggleSuiteDetails(index) {
+        const cases = document.getElementById(`suite-cases-${index}`);
+        if (cases.style.display === 'none') {
+            cases.style.display = 'flex';
+        } else {
+            cases.style.display = 'none';
+        }
+    }
+
+    // Modal
+    function openFileViewer(filename, content) {
+        document.getElementById('modal-filename').innerText = filename;
+        document.getElementById('modal-code-area').value = content || 'File contains binary data or is empty.';
+        document.getElementById('file-modal').classList.add('active');
+    }
+
+    function closeModal() {
+        document.getElementById('file-modal').classList.remove('active');
+    }
+
+    // Interactive File Editor selection
+    function onSelectFileToEdit() {
+        const filename = document.getElementById('edit-filename').value;
+        if (!currentData || !currentData.repo_files) return;
+
+        // Recursive search for file content
+        const findContent = (items) => {
+            for (let item of items) {
+                if (!item.is_dir && item.name === filename) {
+                    return item.content;
+                }
+                if (item.is_dir && item.children) {
+                    const c = findContent(item.children);
+                    if (c !== undefined) return c;
+                }
+            }
+            return '';
+        };
+
+        const content = findContent(currentData.repo_files);
+        document.getElementById('edit-content').value = content;
+    }
+
+    // Flow visualizer
+    function setFlowActive(stepId) {
+        const steps = ['backup', 'clone', 'filter', 'adapter', 'permissions'];
+        const activeIndex = steps.indexOf(stepId);
+        
+        steps.forEach((step, index) => {
+            const el = document.getElementById(`flow-${step}`);
+            if (index < activeIndex) {
+                el.className = "flow-step completed";
+            } else if (index === activeIndex) {
+                el.className = "flow-step active";
+            } else {
+                el.className = "flow-step";
+            }
+        });
+    }
+
+    function clearFlow() {
+        const steps = ['backup', 'clone', 'filter', 'adapter', 'permissions'];
+        steps.forEach(step => {
+            document.getElementById(`flow-${step}`).className = "flow-step";
+        });
+    }
+
+    // Logs Console
+    function addLog(text) {
+        const consoleEl = document.getElementById('console-logs');
+        const div = document.createElement('div');
+        div.innerText = text;
+        consoleEl.insertBefore(div, consoleEl.firstChild);
+    }
+
+    // Toast
+    function showToast(message, type = 'info') {
+        const toast = document.getElementById('toast-notif');
+        const indicator = document.getElementById('toast-indicator');
+        const msg = document.getElementById('toast-message');
+
+        indicator.className = `status-dot status-${type}`;
+        msg.innerText = message;
+        toast.classList.add('show');
+
+        setTimeout(() => {
+            toast.classList.remove('show');
+        }, 4000);
+    }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,114 @@
+{
+    "adapter": "vite",
+    "server": "",
+    "gitRepoUrl": "/home/ian/Desktop/Packages/shipit/package/tests/_support/repo",
+    "branch": "main",
+    "user": "ian",
+    "group": "ian",
+    "ownership": [
+        "public",
+        "public_html",
+        "private_html"
+    ],
+    "symlinks": [
+        [
+            "public",
+            "public_html"
+        ],
+        [
+            "public_html",
+            "private_html"
+        ],
+        [
+            "dist",
+            "public_html"
+        ],
+        [
+            "dist",
+            "public_html"
+        ],
+        [
+            "dist",
+            "public_html"
+        ],
+        [
+            "dist",
+            "public_html"
+        ],
+        [
+            "dist",
+            "public_html"
+        ],
+        [
+            "dist",
+            "public_html"
+        ],
+        [
+            "dist",
+            "public_html"
+        ],
+        [
+            "dist",
+            "public_html"
+        ],
+        [
+            "dist",
+            "public_html"
+        ],
+        [
+            "dist",
+            "public_html"
+        ],
+        [
+            "dist",
+            "public_html"
+        ],
+        [
+            "dist",
+            "public_html"
+        ],
+        [
+            "dist",
+            "public_html"
+        ],
+        [
+            "dist",
+            "public_html"
+        ],
+        [
+            "dist",
+            "public_html"
+        ],
+        [
+            "dist",
+            "public_html"
+        ],
+        [
+            "dist",
+            "public_html"
+        ],
+        [
+            "dist",
+            "public_html"
+        ],
+        [
+            "dist",
+            "public_html"
+        ],
+        [
+            "dist",
+            "public_html"
+        ]
+    ],
+    "writable": [
+        "storage"
+    ],
+    "backup_path": "/home/ian/Desktop/Packages/shipit/package/tests/_support/backups",
+    "backup_retention": 4,
+    "hooks": {
+        "pre-update": "echo \"Entering maintenance mode...\"",
+        "post-update": "echo \"Leaving maintenance mode...\""
+    },
+    "backup_env": true,
+    "last_shipped_at": "2026-06-06 23:49:19"
+}

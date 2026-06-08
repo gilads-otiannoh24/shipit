@@ -7,6 +7,14 @@
     <testsuites>
         <testsuite name="Unit">
             <directory>tests</directory>
+<<<<<<< HEAD
+=======
+            <exclude>tests/_support</exclude>
+            <exclude>tests/e2e</exclude>
+        </testsuite>
+        <testsuite name="E2E">
+            <directory>tests/e2e</directory>
+>>>>>>> f911c96 (Improvements and bug fixes)
         </testsuite>
     </testsuites>
 </phpunit>

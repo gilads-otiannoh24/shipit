@@ -1,0 +1,101 @@
+Authentication (ShipIt\Tests\e2e\Authentication)
+ [ ] Login form sets cookie
+ [ ] Block unauthenticated
+ [ ] Invalid password rejected
+ [ ] Invalid username rejected
+ [ ] Logout destroys session
+
+Authentication Boundary (ShipIt\Tests\e2e\AuthenticationBoundary)
+ [ ] Extremely long credentials
+ [ ] Sql and shell injection in login
+ [ ] Missing csrf token
+ [ ] Malformed session cookie
+ [ ] Expired session cookie
+
+Cross Feature (ShipIt\Tests\e2e\CrossFeature)
+ [ ] Registry and u i
+ [ ] Auth and actions
+ [ ] Webhook and registry u i
+ [ ] Deploy backup rollback
+ [ ] Webhook action logs
+
+Dashboard (ShipIt\Tests\e2e\Dashboard)
+ [ ] Dashboard lists projects
+ [ ] Project details match
+ [ ] Empty dashboard state
+ [ ] Dashboard filter
+ [ ] Static assets load
+
+Dashboard Boundary (ShipIt\Tests\e2e\DashboardBoundary)
+ [ ] Dashboard with malformed config
+ [ ] Non existent project details
+ [ ] Malformed filter query
+ [ ] Project with huge metadata
+ [ ] Xss injection in filters
+
+Harness Check (ShipIt\Tests\e2e\HarnessCheck)
+ [x] Harness setup
+
+Real World Workload (ShipIt\Tests\e2e\RealWorldWorkload)
+ [ ] Full workspace lifecycle
+ [ ] Concurrency and lock stress
+
+Registry (ShipIt\Tests\e2e\Registry)
+ [x] Init new project
+ [x] Init existing project
+ [x] Deploy updates status
+ [x] Config c l i update
+ [ ] Failing deploy updates status
+
+Registry Boundary (ShipIt\Tests\e2e\RegistryBoundary)
+ [x] Malformed json config
+ [x] Shell injection in init
+ [x] Directory traversal in path
+ [ ] Extremely long branch name
+ [x] Empty config values
+
+Remote Actions (ShipIt\Tests\e2e\RemoteActions)
+ [ ] Deploy action returns log id
+ [ ] Rollback action returns log id
+ [ ] Get log stream
+ [ ] Deploy runs background
+ [ ] Invalid action payload
+
+Remote Actions Boundary (ShipIt\Tests\e2e\RemoteActionsBoundary)
+ [ ] Invalid backup timestamp format
+ [ ] Log traversal attack
+ [ ] Deploy non existent path
+ [ ] Deploy invalid git config
+ [ ] Malformed deploy payload
+
+Scenarios (ShipIt\Tests\e2e\Scenarios)
+ [ ] Cli init then ui view
+ [ ] Cli init then ui deploy
+ [ ] Cli init then webhook deploy
+ [ ] Cli config then ui details
+ [ ] Ui login then rollback then cli verify
+ [ ] Webhook deploy then ui log stream
+ [ ] Ui deploy then ui log stream
+ [ ] Cli deploy then ui view
+ [ ] Cli failing deploy then ui view
+ [ ] Webhook failing deploy then ui view
+ [ ] Backup retention rotation
+ [ ] Git merge conflict handling
+ [ ] Multi user operations
+ [ ] System environment verification
+ [ ] Ignore files deployment
+
+Webhooks (ShipIt\Tests\e2e\Webhooks)
+ [ ] Valid webhook token triggers deploy
+ [ ] Webhook is non blocking
+ [ ] Invalid webhook token rejected
+ [ ] Webhook branch filter
+ [ ] Concurrent webhooks queued
+
+Webhooks Boundary (ShipIt\Tests\e2e\WebhooksBoundary)
+ [ ] Webhook missing payload
+ [ ] Webhook malformed json
+ [ ] Webhook invalid method
+ [ ] Webhook token injection
+ [ ] Webhook non existent project
+

@@ -8,6 +8,16 @@ use ShipIt\Contracts\AdapterInterface;
 use ShipIt\Adapters\CI4Adapter;
 use ShipIt\Adapters\LaravelAdapter;
 use ShipIt\Adapters\ViteAdapter;
+use ShipIt\Validation\Validator;
+use ShipIt\Validation\Rules\RequiredConfigRule;
+use ShipIt\Validation\Rules\GitUrlRule;
+use ShipIt\Validation\Rules\BackupRetentionRule;
+use ShipIt\Validation\Rules\BackupPathRule;
+use ShipIt\Validation\Rules\HookCommandRule;
+use ShipIt\Validation\Rules\SymlinkRule;
+use ShipIt\Validation\Rules\SystemUserRule;
+use ShipIt\Validation\Rules\AdapterExistsRule;
+use ShipIt\Validation\Rules\GlobalRegistryRule;
 
 class ShipIt
 {
@@ -16,6 +26,7 @@ class ShipIt
     private TerminalUI $ui;
     private TaskRunner $runner;
     private Filesystem $fs;
+    public Validator $validator;
 
     private string $rootDir;
     private string $deployDir;
@@ -29,6 +40,9 @@ class ShipIt
     private array $onlyList = [];
     private bool $ignoreAll = false;
     private bool $updateSelf = false;
+    private ?string $logId = null;
+    private ?string $currentCmd = null;
+    private ?string $user = null;
 
     private array $updateIgnoreList = [
         '.env',
@@ -53,17 +67,56 @@ class ShipIt
     ];
     private array $adapterRunOrderRules = [];
 
-    public function __construct()
+    public function __construct(string $rootDir = '')
     {
         $this->ui = new TerminalUI();
         $this->runner = new TaskRunner($this->ui);
+        $this->validator = new Validator($this->ui);
 
-        $this->rootDir = getcwd() ?: __DIR__;
-        $this->deployDir = $this->rootDir . '/.deploy';
-        $this->configFile = $this->deployDir . '/config.json';
+        $this->rootDir = $rootDir ?: getcwd() ?: __DIR__;
+        $this->initPaths();
 
         $home = $this->getHomeDir();
         $this->globalConfigFile = $home ? $home . DIRECTORY_SEPARATOR . '.shipit' . DIRECTORY_SEPARATOR . 'config.json' : '';
+
+        $this->setupValidator();
+        $this->setupTasks();
+    }
+
+    private function initPaths(): void
+    {
+        $this->deployDir = $this->rootDir . '/.deploy';
+        $this->configFile = $this->deployDir . '/config.json';
+    }
+
+    private function setupValidator(): void
+    {
+        $this->validator->addRule(new RequiredConfigRule());
+        $this->validator->addRule(new GitUrlRule());
+        $this->validator->addRule(new BackupRetentionRule());
+        $this->validator->addRule(new BackupPathRule());
+        $this->validator->addRule(new HookCommandRule());
+        $this->validator->addRule(new SymlinkRule());
+        $this->validator->addRule(new SystemUserRule());
+        $this->validator->addRule(new AdapterExistsRule());
+        $this->validator->addRule(new GlobalRegistryRule($this->globalConfigFile));
+    }
+
+    /**
+     * Sets the root directory for running deployment
+     * @param string $dir
+     * @param bool $allowMissing Allow directory to be missing (useful for init)
+     * @throws \InvalidArgumentException
+     * @return void
+     */
+    public function setRoot(string $dir, bool $allowMissing = false): void
+    {
+        if (!$allowMissing && !is_dir($dir)) {
+            throw new \InvalidArgumentException("Invalid root directory: $dir");
+        }
+
+        $this->rootDir = $dir;
+        $this->initPaths();
     }
 
     public function run(array $argv): void
@@ -78,6 +131,7 @@ class ShipIt
                 break;
             }
         }
+        $this->currentCmd = $cmd;
 
         if ($cmd !== 'config' || count($argv) <= 2) {
             $this->printLogo();
@@ -119,6 +173,21 @@ class ShipIt
 
         $this->logExecution($cmd);
 
+        $this->applyConfigHooks();
+        $this->applyAdapter();
+        $this->applyServerProfile();
+
+        if ($cmd === 'validate') {
+            $results = $this->validator->validate($this->config, $this->rootDir);
+            $this->validator->displayResults($results);
+            return;
+        }
+
+        if ($cmd === 'registry:prune') {
+            $this->pruneGlobalRegistry();
+            return;
+        }
+
         if ($cmd === 'rollback') {
             $this->doRollback($argv);
             return;
@@ -136,10 +205,20 @@ class ShipIt
             return;
         }
 
-        $this->setupTasks();
-        $this->applyAdapter();
-        $this->applyServerProfile();
+        // Default command is 'deploy'
+        $results = $this->validator->validate($this->config, $this->rootDir);
+        $isValid = $this->validator->displayResults($results);
 
+        if (!$isValid) {
+            $this->ui->error("\nAborting deployment due to configuration errors.");
+            exit(1);
+        }
+
+        $this->doDeploy();
+    }
+
+    private function doDeploy(): void
+    {
         $runOrder = ['backup', 'update', 'composer', 'npm', 'symlink', 'perms'];
         if (!empty($this->adapterRunOrderRules)) {
             $runOrder = $this->runner->mergeRunOrder($runOrder, $this->adapterRunOrderRules);
@@ -154,6 +233,7 @@ class ShipIt
         if (!$this->dryRun) {
             $this->config['last_shipped_at'] = date('Y-m-d H:i:s');
             file_put_contents($this->configFile, json_encode($this->config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            $this->updateGlobalRegistry('success');
         }
 
         $this->ui->success("\n✅ Deployment completed successfully.");
@@ -180,33 +260,31 @@ class ShipIt
     {
         $this->dryRun = in_array('--dry-run', $argv, true);
         $this->log = in_array('--log', $argv, true);
-        $this->ignoreAll = in_array('--ignore-all', $argv, true);
-        $this->updateSelf = in_array('--update', $argv, true);
+        $this->updateSelf = in_array('--self', $argv, true);
 
+        // Parse --only and --ignore
         foreach ($argv as $arg) {
-            if (str_starts_with($arg, '--adapter=')) {
-                $this->config['adapter'] = substr($arg, 10);
-            } elseif (str_starts_with($arg, '--server=')) {
-                $this->config['server'] = substr($arg, 9);
-            } elseif (str_starts_with($arg, '--repo=')) {
-                $this->config['gitRepoUrl'] = substr($arg, 7);
-            } elseif (str_starts_with($arg, '--branch=')) {
-                $this->config['branch'] = substr($arg, 9);
+            if (str_starts_with($arg, '--only=')) {
+                $this->onlyList = explode(',', substr($arg, 7));
             } elseif (str_starts_with($arg, '--ignore=')) {
                 $this->ignoreList = explode(',', substr($arg, 9));
-            } elseif (str_starts_with($arg, '--only=')) {
-                $this->onlyList = explode(',', substr($arg, 7));
+            } elseif ($arg === '--ignore-all') {
+                $this->ignoreAll = true;
             } elseif ($arg === '--help') {
                 $this->showHelp();
                 exit(0);
             } elseif ($arg === '--version' || $arg === '-v') {
                 $this->showVersion();
                 exit(0);
+            } elseif (str_starts_with($arg, '--log-id=')) {
+                $this->logId = substr($arg, 9);
+            } elseif (str_starts_with($arg, '--user=')) {
+                $this->user = substr($arg, 7);
             }
         }
     }
 
-    private function loadConfig(bool $globalOnly = false): void
+    public function loadConfig(bool $globalOnly = false): void
     {
         $defaultConfig = [
             'adapter' => null,
@@ -220,15 +298,22 @@ class ShipIt
                 ['public', 'public_html'],
                 ['public_html', 'private_html']
             ],
-            'writable' => ['.tempest', 'storage', 'bootstrap/cache', 'writable'],
-            'backup_path' => dirname($this->rootDir, 2) . '/domain_backups/' . basename($this->rootDir),
+            'writable' => ['storage', 'bootstrap/cache', 'writable'],
+            'backup_path' => (dirname($this->rootDir, 2) === '/' || !is_writable(dirname($this->rootDir, 2) ?: '/'))
+                ? dirname($this->rootDir) . '/domain_backups/' . basename($this->rootDir)
+                : dirname($this->rootDir, 2) . '/domain_backups/' . basename($this->rootDir),
             'backup_retention' => 5,
-            'last_shipped_at' => null,
+            'hooks' => [
+                'pre-update' => 'echo "Entering maintenance mode..."',
+                'post-update' => 'echo "Leaving maintenance mode..."',
+            ],
         ];
 
+        // 1. Load global config
         $globalConfig = [];
         if (!empty($this->globalConfigFile) && file_exists($this->globalConfigFile)) {
-            $globalConfig = json_decode(file_get_contents($this->globalConfigFile), true) ?: [];
+            $globalData = json_decode(file_get_contents($this->globalConfigFile), true) ?: [];
+            $globalConfig = $globalData['defaults'] ?? [];
         }
 
         if ($globalOnly) {
@@ -236,49 +321,173 @@ class ShipIt
             return;
         }
 
+        // 2. Load project config
+        $projectConfig = [];
         if (file_exists($this->configFile)) {
-            $loaded = json_decode(file_get_contents($this->configFile), true) ?: [];
-            $this->config = array_merge($defaultConfig, $globalConfig, $loaded);
-        } else {
-            $this->ui->info("No project config.json found. Initializing...");
-            $this->config = array_merge($defaultConfig, $globalConfig);
-            $this->config = $this->initInteractive($this->config);
-            if (!$this->dryRun) {
-                if (!is_dir($this->deployDir)) {
-                    mkdir($this->deployDir, 0777, true);
-                }
-                file_put_contents($this->configFile, json_encode($this->config, JSON_PRETTY_PRINT));
+            $projectConfig = json_decode(file_get_contents($this->configFile), true) ?: [];
+        }
+
+        // 3. Merge: Default < Global Defaults < Project Config
+        $this->config = array_merge($defaultConfig, $globalConfig, $projectConfig);
+    }
+
+    private function doInit(array $argv): void
+    {
+        $force = in_array('--force', $argv, true);
+        $gitUrl = null;
+        $branch = 'main';
+        $user = $this->user ?: 'admin';
+
+        foreach ($argv as $arg) {
+            if (str_starts_with($arg, '--git-url=')) {
+                $gitUrl = substr($arg, 10);
+            } elseif (str_starts_with($arg, '--branch=')) {
+                $branch = substr($arg, 9);
             }
+        }
+
+        // Create root directory if it doesn't exist
+        if (!is_dir($this->rootDir)) {
+            mkdir($this->rootDir, 0777, true);
+        }
+
+        if (!is_dir($this->deployDir)) {
+            mkdir($this->deployDir, 0777, true);
+        }
+
+        $this->initConfigFile($force, $gitUrl, $branch, $user);
+        $this->initReadmeFile($force);
+        $this->initAdapterFile($force);
+        $this->initDeployIgnoreFile($force);
+
+        $this->ui->success("\n✅ ShipIt initialized successfully in " . $this->deployDir);
+        $this->updateGlobalRegistry('success');
+    }
+
+    private function writeFile(string $path, string $content, bool $force = false): void
+    {
+        $filename = basename($path);
+        if (file_exists($path) && !$force) {
+            $overwrite = $this->ui->prompt("File '$filename' already exists. Overwrite? (y/n)", "n");
+            if (strtolower($overwrite) !== 'y' && strtolower($overwrite) !== 'yes') {
+                $this->ui->info("Skipped creating '$filename'.");
+                return;
+            }
+        }
+
+        if ($this->dryRun) {
+            $this->ui->info("[Dry Run] Would write to $path:\n$content\n");
+            return;
+        }
+
+        if (file_put_contents($path, $content) !== false) {
+            $this->ui->success("Created: $path");
+        } else {
+            $this->ui->error("Failed to write to $path");
         }
     }
 
-    private function initInteractive(array $baseConfig): array
+    private function initConfigFile(bool $force, ?string $gitUrl = null, string $branch = 'main', string $user = 'admin'): void
     {
-        $config = $baseConfig;
-        $config['gitRepoUrl'] = $this->ui->prompt("Git Repository URL", $config['gitRepoUrl'] ?? '');
-        $config['branch'] = $this->ui->prompt("Branch", $config['branch'] ?? 'main');
-        $adapter = $this->ui->prompt("Framework Adapter (e.g. ci4, laravel, vite, or leave empty)", $config['adapter'] ?? '');
-        if ($adapter !== '') {
-            $config['adapter'] = $adapter;
-        }
-        $config['user'] = $this->ui->prompt("Owner User", $config['user'] ?? 'admin');
-        $config['group'] = $this->ui->prompt("Owner Group", $config['group'] ?? 'admin');
-        $config['backup_path'] = $this->ui->prompt("Backups Path", $config['backup_path']);
+        $this->ui->info("Creating standard config.json...");
+        $defaultConfig = [
+            'adapter' => 'laravel',
+            'server' => 'directadmin',
+            'gitRepoUrl' => $gitUrl ?: 'git@github.com:username/repository.git',
+            'branch' => $branch,
+            'user' => $user,
+            'group' => $user === 'admin' ? 'admin' : $user,
+            'ownership' => ['public', 'public_html', 'private_html'],
+            'symlinks' => [
+                ['public', 'public_html'],
+                ['public_html', 'private_html']
+            ],
+            'writable' => ['storage', 'bootstrap/cache', 'writable'],
+            'backup_path' => (dirname($this->rootDir, 2) === '/' || !is_writable(dirname($this->rootDir, 2) ?: '/'))
+                ? dirname($this->rootDir) . '/domain_backups/' . basename($this->rootDir)
+                : dirname($this->rootDir, 2) . '/domain_backups/' . basename($this->rootDir),
+            'backup_retention' => 5,
+            'hooks' => [
+                'pre-update' => 'echo "Entering maintenance mode..."',
+                'post-update' => 'echo "Leaving maintenance mode..."',
+            ],
+        ];
 
-        $this->ui->success("Configuration saved to {$this->configFile}");
+        $content = json_encode($defaultConfig, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL;
+        $this->writeFile($this->configFile, $content, $force);
+    }
 
-        $this->ui->table(
-            ["Key", "Value"],
-            [
-                ["gitRepoUrl", $config['gitRepoUrl']],
-                ["branch", $config['branch']],
-                ["adapter", $config['adapter'] ?? 'none'],
-                ["user", $config['user']],
-                ["group", $config['group']],
-                ["backup_path", $config['backup_path']],
-            ]
-        );
-        return $config;
+    private function initReadmeFile(bool $force): void
+    {
+        $content = <<<'MARKDOWN'
+# ShipIt Deployment Configuration Directory
+
+This directory contains the deployment configuration files and custom extensions for ShipIt.
+
+## Files
+
+### 1. config.json
+The main configuration file. It overrides the global configuration.
+Key settings:
+- `gitRepoUrl`: The SSH URL of the git repository to deploy from.
+- `branch`: The git branch to clone and deploy (default: "main").
+- `adapter`: Optional framework adapter (e.g. "ci4", "laravel", "vite", "react", or "custom").
+- `server`: Optional server profile (e.g. "directadmin", "cpanel", or "custom").
+- `user` / `group`: The webserver user and group ownership to apply.
+- `backup_path`: Destination directory where backups will be stored before deployment.
+- `ownership`: Array of directories to apply user/group ownership to.
+- `writable`: Array of directories to make writable (chmod 775).
+- `symlinks`: A list of source-to-target pairs for symlinking (e.g., [["public", "public_html"]]).
+- `hooks`: Script commands to run before or after tasks (e.g., "pre-update", "post-composer").
+
+### 2. custom.adapter.php (Optional)
+A custom adapter class. To use it, set "adapter": "custom" in config.json.
+You can implement tasks, hooks, writable paths, symlinks, and run order specific to your framework.
+
+### 3. custom.server.php (Optional)
+A custom server profile returning an array. To use it, set "server": "custom" in config.json.
+You can override directories, add hooks, or run specific tasks suitable for the server environment.
+MARKDOWN;
+
+        $this->writeFile($this->deployDir . '/README.md', $content . PHP_EOL, $force);
+    }
+
+    private function initAdapterFile(bool $force): void
+    {
+        $content = <<<'PHP'
+<?php
+
+declare(strict_types=1);
+
+use ShipIt\Contracts\AdapterInterface;
+use ShipIt\ShipIt;
+
+/**
+ * Custom Adapter for ShipIt.
+ * 
+ * Implement any of the methods to customize deployment behavior.
+ */
+class CustomAdapter implements AdapterInterface
+{
+    public function getTasks(): array { return []; }
+    public function getPreHooks(): array { return []; }
+    public function getPostHooks(): array { return []; }
+    public function getWritablePaths(): array { return []; }
+    public function getOwnershipPaths(): array { return []; }
+    public function getSymlinks(): array { return []; }
+    public function getUpdateIgnore(): array { return []; }
+    public function getBackupIgnore(): array { return []; }
+    public function getRunOrderRules(): array { return []; }
+}
+PHP;
+
+        $this->writeFile($this->deployDir . '/custom.adapter.php', $content . PHP_EOL, $force);
+    }
+
+    private function initDeployIgnoreFile(bool $force): void
+    {
+        $content = implode(PHP_EOL, $this->updateIgnoreList) . PHP_EOL;
+        $this->writeFile($this->rootDir . '/.deployignore', $content, $force);
     }
 
     private function setupTasks(): void
@@ -293,7 +502,6 @@ class ShipIt
         $this->runner->addPreHook('update', fn() => $this->ui->info("🔒 Entering maintenance mode..."));
         $this->runner->addPostHook('update', fn() => $this->ui->info("🔓 Leaving maintenance mode..."));
         $this->runner->addPostHook('composer', fn() => $this->ui->success("🚀 Composer done, autoloader optimized."));
-        $this->applyConfigHooks();
     }
 
     private function applyConfigHooks(): void
@@ -473,7 +681,21 @@ class ShipIt
         }
 
         $this->ui->info("📁 Backup started to $backupRoot ...");
-        $this->fs->copyFolder($this->rootDir, $backupFolder, $this->backupIgnoreList, '', $this->log);
+        $ignoreList = $this->backupIgnoreList;
+        if (isset($this->config['backup_env']) && $this->config['backup_env'] === false) {
+            $ignoreList = array_unique(array_merge($ignoreList, ['.env']));
+        }
+
+        $realRoot = realpath($this->rootDir);
+        $realBackupRoot = realpath($backupRoot);
+        if ($realRoot && $realBackupRoot && str_starts_with($realBackupRoot, $realRoot)) {
+            $relBackupRoot = ltrim(substr($realBackupRoot, strlen($realRoot)), '/\\');
+            if ($relBackupRoot !== '') {
+                $ignoreList[] = $relBackupRoot;
+            }
+        }
+
+        $this->fs->copyFolder($this->rootDir, $backupFolder, $ignoreList, '', $this->log);
         $this->ui->success("Backup saved to $backupFolder");
 
         $this->rotateBackups();
@@ -533,245 +755,165 @@ class ShipIt
             }
         }
 
-        $backups = array_filter(glob($backupRoot . DIRECTORY_SEPARATOR . 'backup_*'), 'is_dir');
-        if (empty($backups)) {
-            $this->ui->error("No backup folders found at $backupRoot.");
-            return;
-        }
-
-        $selectedBackup = null;
-
-        if ($target !== null) {
-            $possiblePaths = [
-                $backupRoot . DIRECTORY_SEPARATOR . $target,
-                $backupRoot . DIRECTORY_SEPARATOR . 'backup_' . $target
-            ];
-            foreach ($possiblePaths as $path) {
-                if (is_dir($path)) {
-                    $selectedBackup = $path;
-                    break;
-                }
-            }
-
-            if ($selectedBackup === null) {
-                $this->ui->error("Specified backup target '$target' not found in $backupRoot.");
+        if (!$target) {
+            // Find most recent backup
+            $backups = glob("$backupRoot/backup_*");
+            if (empty($backups)) {
+                $this->ui->error("No backups found in $backupRoot.");
                 return;
             }
+            rsort($backups);
+            $target = $backups[0];
         } else {
-            usort($backups, function ($a, $b) {
-                return filemtime($b) <=> filemtime($a);
-            });
-
-            if (count($backups) > 1) {
-                $this->ui->info("Multiple backups found. Please select which one to restore:");
-                foreach ($backups as $index => $b) {
-                    $name = basename($b);
-                    $num = $index + 1;
-                    $time = date('Y-m-d H:i:s', filemtime($b));
-                    echo "  [$num] $name (Created: $time)\n";
-                }
-
-                $choice = $this->ui->prompt("Select backup (1-" . count($backups) . ")", "1");
-                $choiceIdx = (int) $choice - 1;
-
-                if (isset($backups[$choiceIdx])) {
-                    $selectedBackup = $backups[$choiceIdx];
-                } else {
-                    $this->ui->error("Invalid selection. Defaulting to latest backup.");
-                    $selectedBackup = $backups[0];
-                }
-            } else {
-                $selectedBackup = $backups[0];
+            // If target is just a timestamp, prepend prefix
+            if (!str_starts_with($target, 'backup_') && !str_contains($target, '/')) {
+                $target = "backup_$target";
+            }
+            // If it's a relative path, make it absolute against backupRoot
+            if (!str_contains($target, '/')) {
+                $target = "$backupRoot/$target";
             }
         }
 
-        if (!$selectedBackup || !is_dir($selectedBackup)) {
-            $this->ui->error("No valid backup found.");
+        if (!is_dir($target)) {
+            $this->ui->error("Rollback target not found: $target");
             return;
         }
 
-        $this->ui->info("🔁 Rollback started from " . basename($selectedBackup) . " ...");
-
-        $this->ui->info("🧹 Clearing current project directory...");
-        $this->fs->clearDirectory($this->rootDir, ['.deploy', '.git']);
-
-        $this->ui->info("📦 Restoring files from backup...");
-        $this->fs->copyFolder($selectedBackup, $this->rootDir, [], '', $this->log);
-
-        $this->ui->info("⚙️ Running post-rollback tasks...");
-        $this->setupTasks();
-        $this->applyAdapter();
-
-        // During rollback, skip backup and update
-        $runOrder = ['composer', 'npm', 'symlink', 'perms'];
-        if (!empty($this->adapterRunOrderRules)) {
-            $runOrder = $this->runner->mergeRunOrder($runOrder, $this->adapterRunOrderRules);
-        }
-
-        $this->runner->run($runOrder, $this->ignoreList, $this->onlyList, $this->ignoreAll, $this);
-
-        $this->ui->success("Rollback complete");
+        $this->ui->info("⏪ Rolling back to $target ...");
+        $this->fs->copyFolder($target, $this->rootDir, [], '', $this->log, true);
+        $this->ui->success("Rollback completed successfully.");
+        $this->updateGlobalRegistry('success');
     }
 
     private function doBackups(): void
     {
         $backupRoot = $this->config['backup_path'];
         if (!is_dir($backupRoot)) {
-            $this->ui->info("Backup directory '$backupRoot' does not exist yet.");
+            $this->ui->info("Backup directory does not exist yet.");
             return;
         }
 
-        $backups = array_filter(glob($backupRoot . DIRECTORY_SEPARATOR . 'backup_*'), 'is_dir');
+        $backups = glob("$backupRoot/backup_*");
         if (empty($backups)) {
-            $this->ui->info("No backups found in $backupRoot.");
+            $this->ui->info("No backups found.");
             return;
         }
 
-        usort($backups, function ($a, $b) {
-            return filemtime($b) <=> filemtime($a);
-        });
-
-        $this->ui->info("Available Backups (Newest First):");
-        $rows = [];
+        rsort($backups);
+        $this->ui->info("Available Backups (most recent first):");
         foreach ($backups as $b) {
-            $name = basename($b);
-            $timestamp = substr($name, 7); // extract timestamp from 'backup_YYYYMMDD_HHMMSS'
-            $formattedDate = 'Unknown';
-            if (strlen($timestamp) === 15) {
-                $parts = explode('_', $timestamp);
-                if (count($parts) === 2) {
-                    $date = $parts[0];
-                    $time = $parts[1];
-                    $formattedDate = substr($date, 0, 4) . '-' . substr($date, 4, 2) . '-' . substr($date, 6, 2) . ' ' .
-                        substr($time, 0, 2) . ':' . substr($time, 2, 2) . ':' . substr($time, 4, 2);
-                }
-            }
-            $size = $this->getFolderSize($b);
-            $rows[] = [$name, $formattedDate, $this->formatSize($size)];
+            $ts = substr(basename($b), 7);
+            echo "  - $ts (" . basename($b) . ")\n";
         }
-
-        $this->ui->table(
-            ['Backup Name', 'Created At', 'Size'],
-            $rows
-        );
     }
 
-    private function getFolderSize(string $dir): int
+    private function rotateBackups(): void
     {
-        $size = 0;
-        if (!is_dir($dir)) {
-            return 0;
-        }
-        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS)) as $file) {
-            $size += $file->getSize();
-        }
-        return $size;
-    }
+        $backupRoot = $this->config['backup_path'];
+        $retention = (int) ($this->config['backup_retention'] ?? 5);
 
-    private function formatSize(int $bytes): string
-    {
-        if ($bytes >= 1073741824) {
-            return number_format($bytes / 1073741824, 2) . ' GB';
+        if ($retention <= 0)
+            return;
+
+        $backups = glob("$backupRoot/backup_*");
+        if (count($backups) <= $retention)
+            return;
+
+        sort($backups); // Oldest first
+        $toDeleteCount = count($backups) - $retention;
+
+        for ($i = 0; $i < $toDeleteCount; $i++) {
+            $this->ui->info("🗑️ Rotating old backup: " . basename($backups[$i]));
+            $this->fs->removeFolder($backups[$i]);
         }
-        if ($bytes >= 1048576) {
-            return number_format($bytes / 1048576, 2) . ' MB';
-        }
-        if ($bytes >= 1024) {
-            return number_format($bytes / 1024, 2) . ' KB';
-        }
-        return $bytes . ' B';
     }
 
     private function fixPermissions(): void
     {
-        $user = $this->config['user'] ?? 'admin';
-        $group = $this->config['group'] ?? 'admin';
-        $basePath = $this->rootDir;
+        $user = $this->config['user'] ?? null;
+        $group = $this->config['group'] ?? null;
 
-        $this->ui->info("🔑 Fixing permissions in $basePath ...");
-
-        foreach ($this->config['ownership'] as $dir) {
-            $path = $basePath . '/' . $dir;
-            if (file_exists($path)) {
-                $this->runCommand("Chown $dir", "chown -R $user:$group " . escapeshellarg($path), true);
+        // 1. Chown
+        if ($user || $group) {
+            $ownership = (array) ($this->config['ownership'] ?? []);
+            foreach ($ownership as $path) {
+                $fullPath = $this->rootDir . '/' . $path;
+                if (file_exists($fullPath)) {
+                    $cmd = "chown -R ";
+                    if ($user)
+                        $cmd .= escapeshellarg($user);
+                    if ($group)
+                        $cmd .= ":" . escapeshellarg($group);
+                    $cmd .= " " . escapeshellarg($fullPath);
+                    $this->runCommand("Apply Ownership ($path)", $cmd, true);
+                }
             }
         }
 
-        $this->runCommand('Set directory perms', "find " . escapeshellarg($basePath) . " -type d -exec chmod 755 {} +", true);
-        $this->runCommand('Set file perms', "find " . escapeshellarg($basePath) . " -type f -exec chmod 644 {} +", true);
-
-        foreach ($this->config['writable'] as $dir) {
-            $path = $basePath . '/' . $dir;
-            if (is_dir($path)) {
-                $this->runCommand("Writable $dir", "chmod -R 775 " . escapeshellarg($path), true);
+        // 2. Chmod writable
+        $writable = (array) ($this->config['writable'] ?? []);
+        foreach ($writable as $path) {
+            $fullPath = $this->rootDir . '/' . $path;
+            if (file_exists($fullPath)) {
+                $this->runCommand("Apply Writable Perms ($path)", "chmod -R 775 " . escapeshellarg($fullPath), true);
             }
         }
-        $this->ui->success("Permissions fixed");
     }
 
     private function createSymlinks(): void
     {
-        $paths = $this->config["symlinks"] ?? [];
-        $basePath = $this->rootDir;
+        $symlinks = (array) ($this->config['symlinks'] ?? []);
+        foreach ($symlinks as $pair) {
+            if (!is_array($pair) || count($pair) !== 2)
+                continue;
+            [$src, $dest] = $pair;
 
-        foreach ($paths as $p) {
-            if (!(is_array($p) && isset($p[0]) && isset($p[1]) && is_string($p[0]) && is_string($p[1]))) {
-                $this->ui->error("Symlink pair is invalid");
+            $fullSrc = $this->rootDir . '/' . $src;
+            $fullDest = $this->rootDir . '/' . $dest;
+
+            if (!file_exists($fullSrc)) {
+                $this->ui->warning("Symlink source not found: $src (Skipping)");
                 continue;
             }
 
-            $f1 = "$basePath/{$p[0]}";
-            $f2 = "$basePath/{$p[1]}";
-
-            if (is_dir($f1) || is_file($f1)) {
-                if (is_link($f2) || is_dir($f2) || is_file($f2)) {
-                    $this->runCommand("Remove existing {$p[1]}", "rm -rf " . escapeshellarg($f2), true);
-                }
-                $this->runCommand('Create symlink', "ln -s ./{$p[0]} ./{$p[1]}", true);
-            } else {
-                $this->ui->info("⚠️  Skipped symlink: no {$p[0]} found");
+            if (file_exists($fullDest) || is_link($fullDest)) {
+                $this->runCommand("Remove existing target ($dest)", "rm -rf " . escapeshellarg($fullDest), true);
             }
-        }
-    }
 
-    private function listTasks(): void
-    {
-        $this->ui->info("📋  Use `shipit` to run the deployment.");
-        $this->ui->info("Other commands: rollback, list, status, config");
+            $this->runCommand("Create Symlink ($src -> $dest)", "ln -s " . escapeshellarg($fullSrc) . " " . escapeshellarg($fullDest), true);
+        }
     }
 
     private function doStatus(): void
     {
-        $this->ui->info("ShipIt Deployment Status");
+        $this->ui->info("ShipIt Project Status");
+        $this->ui->info("Root: " . $this->rootDir);
+
         $this->ui->table(
-            ["Configuration", "Value"],
+            ["Config Key", "Value"],
             [
-                ["Project Root", $this->rootDir],
-                ["Backup Path", $this->config['backup_path'] ?? 'not set'],
-                ["Git Repo", $this->config['gitRepoUrl'] ?? 'not set'],
-                ["Branch", $this->config['branch'] ?? 'main'],
+                ["Repository", $this->config['gitRepoUrl']],
+                ["Branch", $this->config['branch']],
                 ["Adapter", $this->config['adapter'] ?? 'none'],
-                ["Server Profile", $this->config['server'] ?? 'none'],
-                ["User/Group", ($this->config['user'] ?? 'admin') . ':' . ($this->config['group'] ?? 'admin')],
-                ["Backup Retention", (string) ($this->config['backup_retention'] ?? 5)],
                 ["Last Shipped", $this->config['last_shipped_at'] ?? 'Never'],
             ]
         );
 
-        $this->setupTasks();
-        $this->applyAdapter();
-        $this->applyServerProfile();
-
-        $runOrder = ['backup', 'update', 'composer', 'npm', 'symlink', 'perms'];
-        if (!empty($this->adapterRunOrderRules)) {
-            $runOrder = $this->runner->mergeRunOrder($runOrder, $this->adapterRunOrderRules);
-        }
+        $backupRoot = $this->config['backup_path'];
+        $backups = is_dir($backupRoot) ? glob("$backupRoot/backup_*") : [];
+        $this->ui->info("\nBackups: " . count($backups) . " stored in $backupRoot");
 
         $registeredTasks = array_keys($this->runner->getTasks());
         $preHooks = $this->runner->getPreHooks();
         $postHooks = $this->runner->getPostHooks();
 
         $this->ui->info("\nDeployment Tasks in Run Order:");
+        $runOrder = ['backup', 'update', 'composer', 'npm', 'symlink', 'perms'];
+        if (!empty($this->adapterRunOrderRules)) {
+            $runOrder = $this->runner->mergeRunOrder($runOrder, $this->adapterRunOrderRules);
+        }
+
         foreach ($runOrder as $index => $taskName) {
             $details = [];
             if (isset($preHooks[$taskName]) && count($preHooks[$taskName]) > 0) {
@@ -903,484 +1045,285 @@ class ShipIt
         return empty($items);
     }
 
-    private function getHomeDir(): ?string
+    public function getHomeDir(): ?string
     {
-        $home = getenv('HOME') ?: getenv('USERPROFILE');
+        $home = getenv('SHIPIT_HOME') ?: getenv('HOME') ?: getenv('USERPROFILE');
         return $home ? rtrim($home, DIRECTORY_SEPARATOR) : null;
+    }
+
+    public function updateGlobalRegistry(?string $outcome = null): void
+    {
+        if (empty($this->globalConfigFile)) {
+            return;
+        }
+
+        if ($this->dryRun) {
+            return;
+        }
+
+        // Determine project config values
+        $gitRepoUrl = null;
+        $branch = 'main';
+        $user = $this->user ?: 'admin';
+
+        if (file_exists($this->configFile)) {
+            $projectConfig = json_decode(file_get_contents($this->configFile), true) ?: [];
+            $gitRepoUrl = $projectConfig['gitRepoUrl'] ?? null;
+            $branch = $projectConfig['branch'] ?? 'main';
+            $user = $projectConfig['user'] ?? $user;
+        }
+
+        $globalConfigDir = dirname($this->globalConfigFile);
+        if (!is_dir($globalConfigDir)) {
+            @mkdir($globalConfigDir, 0777, true);
+        }
+
+        $fp = fopen($this->globalConfigFile, 'c+');
+        if (!$fp) {
+            return;
+        }
+
+        if (flock($fp, LOCK_EX)) {
+            clearstatcache(true, $this->globalConfigFile);
+            $fileSize = filesize($this->globalConfigFile);
+            $content = '';
+            if ($fileSize > 0) {
+                rewind($fp);
+                $content = fread($fp, $fileSize);
+            }
+            $registry = json_decode($content, true) ?: [];
+
+            if (!isset($registry['projects']) || !is_array($registry['projects'])) {
+                $registry['projects'] = [];
+            }
+
+            $path = realpath($this->rootDir) ?: $this->rootDir;
+            $existingEntry = $registry['projects'][$path] ?? [];
+
+            $webhookToken = $existingEntry['webhook_token'] ?? null;
+            if (empty($webhookToken)) {
+                $webhookToken = bin2hex(random_bytes(16));
+            }
+
+            $lastShippedAt = $existingEntry['last_shipped_at'] ?? null;
+            $latestOutcome = $existingEntry['latest_outcome'] ?? null;
+            $history = $existingEntry['history'] ?? [];
+
+            if ($outcome === 'success') {
+                $lastShippedAt = date('Y-m-d H:i:s');
+                $latestOutcome = 'success';
+            } elseif ($outcome === 'failed') {
+                $latestOutcome = 'failed';
+            }
+
+            // Append to history if a command and outcome are provided
+            if ($outcome && $this->currentCmd) {
+                array_unshift($history, [
+                    'timestamp' => date('Y-m-d H:i:s'),
+                    'command' => $this->currentCmd,
+                    'outcome' => $outcome,
+                    'log_id' => $this->logId
+                ]);
+                // Keep only latest 15
+                $history = array_slice($history, 0, 15);
+            }
+
+            $registry['projects'][$path] = [
+                'path' => $path,
+                'gitRepoUrl' => $gitRepoUrl,
+                'branch' => $branch,
+                'user' => $user,
+                'last_shipped_at' => $lastShippedAt,
+                'latest_outcome' => $latestOutcome,
+                'webhook_token' => $webhookToken,
+                'history' => $history
+            ];
+
+            ftruncate($fp, 0);
+            rewind($fp);
+            fwrite($fp, json_encode($registry, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            fflush($fp);
+            flock($fp, LOCK_UN);
+        }
+        fclose($fp);
+    }
+
+    /**
+     * Persists an integration token for a specific user and provider.
+     */
+    public function setUserIntegrationToken(string $username, string $provider, string $token): void
+    {
+        if (empty($this->globalConfigFile))
+            return;
+
+        $fp = fopen($this->globalConfigFile, 'c+');
+        if (!$fp)
+            return;
+
+        if (flock($fp, LOCK_EX)) {
+            clearstatcache(true, $this->globalConfigFile);
+            $fileSize = filesize($this->globalConfigFile);
+            $content = '';
+            if ($fileSize > 0) {
+                rewind($fp);
+                $content = fread($fp, $fileSize);
+            }
+            $registry = json_decode($content, true) ?: [];
+
+            if (!isset($registry['integrations'])) {
+                $registry['integrations'] = [];
+            }
+            if (!isset($registry['integrations'][$provider])) {
+                $registry['integrations'][$provider] = [];
+            }
+            if (!isset($registry['integrations'][$provider]['users'])) {
+                $registry['integrations'][$provider]['users'] = [];
+            }
+
+            $registry['integrations'][$provider]['users'][$username] = [
+                'token' => $token,
+                'updated_at' => date('Y-m-d H:i:s')
+            ];
+
+            ftruncate($fp, 0);
+            rewind($fp);
+            fwrite($fp, json_encode($registry, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            fflush($fp);
+            flock($fp, LOCK_UN);
+        }
+        fclose($fp);
+    }
+
+    /**
+     * Retrieves an integration token for a specific user and provider.
+     */
+    public function getUserIntegrationToken(string $username, string $provider): ?string
+    {
+        if (empty($this->globalConfigFile) || !file_exists($this->globalConfigFile)) {
+            return null;
+        }
+
+        $registry = json_decode(file_get_contents($this->globalConfigFile), true) ?: [];
+        return $registry['integrations'][$provider]['users'][$username]['token'] ?? null;
+    }
+
+    private function listTasks(): void
+    {
+        $runOrder = ['backup', 'update', 'composer', 'npm', 'symlink', 'perms'];
+        if (!empty($this->adapterRunOrderRules)) {
+            $runOrder = $this->runner->mergeRunOrder($runOrder, $this->adapterRunOrderRules);
+        }
+
+        $registeredTasks = array_keys($this->runner->getTasks());
+        $preHooks = $this->runner->getPreHooks();
+        $postHooks = $this->runner->getPostHooks();
+
+        $this->ui->info("\nDeployment Tasks in Run Order:");
+        foreach ($runOrder as $index => $taskName) {
+            $details = [];
+            if (isset($preHooks[$taskName]) && count($preHooks[$taskName]) > 0) {
+                $details[] = count($preHooks[$taskName]) . " pre-hook(s)";
+            }
+            if (isset($postHooks[$taskName]) && count($postHooks[$taskName]) > 0) {
+                $details[] = count($postHooks[$taskName]) . " post-hook(s)";
+            }
+
+            $suffix = !empty($details) ? " (" . implode(', ', $details) . ")" : "";
+            echo "  " . ($index + 1) . ". " . $taskName . $suffix . "\n";
+        }
+
+        $diff = array_diff($registeredTasks, $runOrder);
+        if (!empty($diff)) {
+            $this->ui->info("\nOther Registered Tasks (Not in run order):");
+            foreach ($diff as $taskName) {
+                echo "  - $taskName\n";
+            }
+        }
+    }
+
+    private function pruneGlobalRegistry(): void
+    {
+        if (empty($this->globalConfigFile) || !file_exists($this->globalConfigFile)) {
+            $this->ui->info("Global registry file not found.");
+            return;
+        }
+
+        $this->ui->info("Checking global registry for dead project paths...");
+
+        $fp = fopen($this->globalConfigFile, 'c+');
+        if (!$fp) {
+            $this->ui->error("Could not open global registry file for pruning.");
+            return;
+        }
+
+        if (flock($fp, LOCK_EX)) {
+            clearstatcache(true, $this->globalConfigFile);
+            $fileSize = filesize($this->globalConfigFile);
+            $content = '';
+            if ($fileSize > 0) {
+                rewind($fp);
+                $content = fread($fp, $fileSize);
+            }
+
+            $registry = json_decode($content, true) ?: [];
+
+            if (!isset($registry['projects']) || !is_array($registry['projects'])) {
+                $this->ui->warning("Registry is empty or invalid.");
+                flock($fp, LOCK_UN);
+                fclose($fp);
+                return;
+            }
+
+            $prunedPaths = [];
+            foreach ($registry['projects'] as $path => $data) {
+                if (!is_dir($path)) {
+                    $prunedPaths[] = $path;
+                    unset($registry['projects'][$path]);
+                }
+            }
+
+            if (!empty($prunedPaths)) {
+                foreach ($prunedPaths as $p) {
+                    $this->ui->warning("🗑️  Pruning non-existent project: $p");
+                }
+                ftruncate($fp, 0);
+                rewind($fp);
+                fwrite($fp, json_encode($registry, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+                $this->ui->success("Successfully pruned " . count($prunedPaths) . " dead project(s).");
+            } else {
+                $this->ui->success("Registry is clean. No dead paths found.");
+            }
+
+            fflush($fp);
+            flock($fp, LOCK_UN);
+        }
+        fclose($fp);
     }
 
     private function showHelp(): void
     {
-        $this->printLogo();
-        echo "Usage: shipit [command] [options]\n\n";
-        echo "Commands:\n";
-        echo "  deploy (default)          Run the deployment process\n";
-        echo "  rollback [target]         Restore a backup (omitted = latest)\n";
-        echo "  backups                   List all available backups\n";
-        echo "  list                      Show available tasks\n";
-        echo "  status                    Show current configuration and state\n";
-        echo "  config [key] [value]      Manage configuration\n";
-        echo "    --global                Manage global settings (~/.shipit/config.json)\n";
-        echo "  init [target]             Initialize configuration skeletons in .deploy/\n";
-        echo "    Targets: config, ignore, adapter, server (omitted = all)\n";
-        echo "  doctor                    Run diagnostic checks on server environment\n";
-        echo "  version                   Show this script's version\n\n";
-        echo "Options:\n";
-        echo "  --adapter=ci4             Use CI4 adapter\n";
-        echo "  --server=directadmin      Use DirectAdmin server profile\n";
-        echo "  --ignore=<task1,task2>    Skip specific tasks\n";
-        echo "  --only=<task1,task2>      Run only specific tasks\n";
-        echo "  --ignore-all              Skip all optional tasks\n";
-        echo "  --dry-run                 Simulate deployment\n";
-        echo "  --log                     Show files copied\n";
-        echo "  --update                  Update this script too\n";
-        echo "  --version, -v             Show this script's version\n";
-        echo "  --help                    Show this help\n";
-    }
-
-    private function doInit(array $argv): void
-    {
-        $sub = null;
-        foreach (array_slice($argv, 1) as $arg) {
-            if ($arg !== 'init' && !str_starts_with($arg, '--')) {
-                $sub = strtolower($arg);
-                break;
-            }
-        }
-
-        if (!is_dir($this->deployDir) && !$this->dryRun) {
-            mkdir($this->deployDir, 0777, true);
-            $this->ui->success("Created deployment directory: {$this->deployDir}");
-        }
-
-        if ($sub === 'config') {
-            $this->initConfigFile(true);
-        } elseif ($sub === 'ignore') {
-            $this->initIgnoreFile(true);
-        } elseif ($sub === 'adapter') {
-            $this->initAdapterFile(true);
-        } elseif ($sub === 'server') {
-            $this->initServerFile(true);
-        } elseif ($sub === null) {
-            $this->ui->info("Initializing ShipIt deployment configuration in: {$this->rootDir}");
-
-            $this->initConfigFile(false);
-            $this->initIgnoreFile(false);
-            $this->initReadmeFile(false);
-
-            $createAdapter = $this->ui->prompt("Do you want to create a custom adapter skeleton? (y/n)", "n");
-            if (strtolower($createAdapter) === 'y' || strtolower($createAdapter) === 'yes') {
-                $this->initAdapterFile(false);
-            }
-
-            $createServer = $this->ui->prompt("Do you want to create a custom server profile skeleton? (y/n)", "n");
-            if (strtolower($createServer) === 'y' || strtolower($createServer) === 'yes') {
-                $this->initServerFile(false);
-            }
-
-            $this->ui->success("Initialization complete!");
-        } else {
-            $this->ui->error("Unknown init target '$sub'. Available targets: config, ignore, adapter, server.");
-        }
-    }
-
-    private function writeFile(string $path, string $content, bool $force = false): void
-    {
-        $filename = basename($path);
-        if (file_exists($path) && !$force) {
-            $overwrite = $this->ui->prompt("File '$filename' already exists. Overwrite? (y/n)", "n");
-            if (strtolower($overwrite) !== 'y' && strtolower($overwrite) !== 'yes') {
-                $this->ui->info("Skipped creating '$filename'.");
-                return;
-            }
-        }
-
-        if ($this->dryRun) {
-            $this->ui->info("[Dry Run] Would write to $path:\n$content\n");
-            return;
-        }
-
-        if (file_put_contents($path, $content) !== false) {
-            $this->ui->success("Created: $path");
-        } else {
-            $this->ui->error("Failed to write to $path");
-        }
-    }
-
-    private function initConfigFile(bool $force): void
-    {
-        $this->ui->info("Creating standard config.json...");
-        $defaultConfig = [
-            'adapter' => 'laravel',
-            'server' => 'directadmin',
-            'gitRepoUrl' => 'git@github.com:username/repository.git',
-            'branch' => 'main',
-            'user' => 'admin',
-            'group' => 'admin',
-            'ownership' => ['public', 'public_html', 'private_html'],
-            'symlinks' => [
-                ['public', 'public_html'],
-                ['public_html', 'private_html']
-            ],
-            'writable' => ['storage', 'bootstrap/cache', 'writable'],
-            'backup_path' => dirname($this->rootDir, 2) . '/domain_backups/' . basename($this->rootDir),
-            'backup_retention' => 5,
-            'hooks' => [
-                'pre-update' => 'echo "Entering maintenance mode..."',
-                'post-update' => 'echo "Leaving maintenance mode..."',
-            ],
-        ];
-
-        $content = json_encode($defaultConfig, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL;
-        $this->writeFile($this->configFile, $content, $force);
-    }
-
-    private function initReadmeFile(bool $force): void
-    {
-        $content = <<<'MARKDOWN'
-# ShipIt Deployment Configuration Directory
-
-This directory contains the deployment configuration files and custom extensions for ShipIt.
-
-## Files
-
-### 1. config.json
-The main configuration file. It overrides the global configuration.
-Key settings:
-- `gitRepoUrl`: The SSH URL of the git repository to deploy from.
-- `branch`: The git branch to clone and deploy (default: "main").
-- `adapter`: Optional framework adapter (e.g. "ci4", "laravel", "vite", "react", or "custom").
-- `server`: Optional server profile (e.g. "directadmin", "cpanel", or "custom").
-- `user` / `group`: The webserver user and group ownership to apply.
-- `backup_path`: Destination directory where backups will be stored before deployment.
-- `ownership`: Array of directories to apply user/group ownership to.
-- `writable`: Array of directories to make writable (chmod 775).
-- `symlinks`: A list of source-to-target pairs for symlinking (e.g., [["public", "public_html"]]).
-- `hooks`: Script commands to run before or after tasks (e.g., "pre-update", "post-composer").
-
-### 2. custom.adapter.php (Optional)
-A custom adapter class. To use it, set "adapter": "custom" in config.json.
-You can implement tasks, hooks, writable paths, symlinks, and run order specific to your framework.
-
-### 3. custom.server.php (Optional)
-A custom server profile returning an array. To use it, set "server": "custom" in config.json.
-You can override directories, add hooks, or run specific tasks suitable for the server environment.
-MARKDOWN;
-
-        $this->writeFile($this->deployDir . '/README.md', $content . PHP_EOL, $force);
-    }
-
-    private function initAdapterFile(bool $force): void
-    {
-        $content = <<<'PHP'
-<?php
-
-declare(strict_types=1);
-
-use ShipIt\Contracts\AdapterInterface;
-use ShipIt\ShipIt;
-
-/**
- * Custom Adapter for ShipIt.
- * 
- * NOTE: If you want to EXTEND an existing framework adapter (like CI4 or Laravel)
- * to run custom scripts/tasks in addition to the default tasks, you can:
- * 1. Keep "adapter": "ci4" (or "laravel") in your config.json.
- * 2. Implement your custom tasks and hooks in this CustomAdapter.
- * ShipIt will automatically load both and merge their tasks/hooks.
- *
- * Alternatively, you can subclass the adapter directly:
- * class CustomAdapter extends \ShipIt\Adapters\CI4Adapter { ... }
- */
-class CustomAdapter implements AdapterInterface
-{
-    /**
-     * Define custom tasks for your deployment process.
-     * These tasks are run during the deployment.
-     *
-     * @return array<string, callable>
-     */
-    public function getTasks(): array
-    {
-        return [
-            // Example of a custom task:
-            // 'my_custom_task' => function (ShipIt $shipIt) {
-            //     $shipIt->runCommand('My Custom Task', 'echo "Running my custom task!"');
-            // }
-        ];
-    }
-
-    /**
-     * Define commands or actions to execute BEFORE specific deployment tasks.
-     *
-     * @return array<string, array<callable>>
-     */
-    public function getPreHooks(): array
-    {
-        return [
-            // Example: run a command before the update task starts
-            // 'update' => [
-            //     function (ShipIt $shipIt) {
-            //         $shipIt->runCommand('Maintenance On', 'php artisan down', true);
-            //     }
-            // ]
-        ];
-    }
-
-    /**
-     * Define commands or actions to execute AFTER specific deployment tasks.
-     *
-     * @return array<string, array<callable>>
-     */
-    public function getPostHooks(): array
-    {
-        return [
-            // Example: run a command after the update task completes
-            // 'update' => [
-            //     function (ShipIt $shipIt) {
-            //         $shipIt->runCommand('Maintenance Off', 'php artisan up', true);
-            //     }
-            // ]
-        ];
-    }
-
-    /**
-     * Return list of directories that need write permissions (chmod 775).
-     *
-     * @return array<string>
-     */
-    public function getWritablePaths(): array
-    {
-        return [
-            // 'storage',
-            // 'bootstrap/cache'
-        ];
-    }
-
-    /**
-     * Return list of directories that need ownership fixed (chown user:group).
-     *
-     * @return array<string>
-     */
-    public function getOwnershipPaths(): array
-    {
-        return [];
-    }
-
-    /**
-     * Return list of symlink mappings to create.
-     * Format: [['source_relative_path', 'target_relative_path']]
-     *
-     * @return array<array{string, string}>
-     */
-    public function getSymlinks(): array
-    {
-        return [];
-    }
-
-    /**
-     * List of paths relative to root directory to ignore during update.
-     *
-     * @return array<string>
-     */
-    public function getUpdateIgnore(): array
-    {
-        return [];
-    }
-
-    /**
-     * List of paths relative to root directory to ignore during backup.
-     *
-     * @return array<string>
-     */
-    public function getBackupIgnore(): array
-    {
-        return [];
-    }
-
-    /**
-     * Define run order rules relative to default tasks.
-     * Format: ['after' => ['task1' => ['task2']], 'before' => [...]]
-     *
-     * @return array
-     */
-    public function getRunOrderRules(): array
-    {
-        return [
-            // Example: run 'my_custom_task' after the 'update' task
-            // 'after' => [
-            //     'update' => ['my_custom_task']
-            // ]
-        ];
-    }
-}
-PHP;
-
-        $path = $this->deployDir . '/custom.adapter.php';
-        $this->writeFile($path, $content, $force);
-    }
-
-    private function initServerFile(bool $force): void
-    {
-        $content = <<<'PHP'
-<?php
-
-declare(strict_types=1);
-
-/**
- * Custom Server Profile for ShipIt.
- * To use this profile, set "server": "custom" in your .deploy/config.json.
- *
- * This profile returns an array defining server-specific hooks, tasks, permissions,
- * symlinks, and ignore rules.
- */
-return [
-    // Custom tasks specific to this server
-    'tasks' => [
-        // 'restart_fpm' => function ($shipIt) {
-        //     $shipIt->runCommand('Restart PHP-FPM', 'sudo systemctl restart php8.2-fpm', true);
-        // }
-    ],
-
-    // Pre-hooks to run before core tasks
-    'preHooks' => [
-        // 'backup' => [
-        //     function ($shipIt) {
-        //         $shipIt->info("Starting custom server backup pre-hook");
-        //     }
-        // ]
-    ],
-
-    // Post-hooks to run after core tasks
-    'postHooks' => [
-        // 'perms' => [
-        //     function ($shipIt) {
-        //         $shipIt->runCommand('Optimize OpCache', 'cachetool opcache:status', true);
-        //     }
-        // ]
-    ],
-
-    // Paths that must be writable on this server (chmod 775)
-    'writable' => [
-        // 'storage/logs'
-    ],
-
-    // Paths that need ownership fixed on this server (chown user:group)
-    'ownership' => [
-        // 'public_html'
-    ],
-
-    // Symlinks to establish on this server
-    'symlinks' => [
-        // ['public', 'public_html']
-    ],
-
-    // Lists of paths to ignore specific to this server
-    'ignoreLists' => [
-        'update' => [
-            // '.htaccess_production'
-        ],
-        'backup' => [
-            // 'tmp'
-        ]
-    ]
-];
-PHP;
-
-        $path = $this->deployDir . '/custom.server.php';
-        $this->writeFile($path, $content, $force);
-    }
-
-    private function initIgnoreFile(bool $force): void
-    {
-        $content = <<<'INI'
-# .deployignore
-# This file tells ShipIt which files and directories to ignore when copying
-# files from your cloned Git repository into the active production directory.
-#
-# Patterns are matched relative to the repository root.
-# Lines starting with '#' are treated as comments and ignored.
-
-# Environment and sensitive configuration files
-.env
-.env.local
-.env.production
-*.key
-
-# Version control files
-.git
-.gitignore
-.gitattributes
-.github/
-.gitlab-ci.yml
-
-# ShipIt deployment files
-.deploy/
-.deployignore
-shipit
-config.json
-
-# Composer and Package Manager directories
-# (ShipIt will run 'composer install' and 'npm build' in production,
-# so we ignore the local source copies if they exist)
-vendor/
-node_modules/
-
-# Cache, Logs, and Temp files
-logs/
-*.log
-tmp/
-.sass-cache/
-.eslintcache
-.phpunit.result.cache
-
-# Framework-specific directories (e.g. Laravel / CodeIgniter)
-storage/
-writable/
-bootstrap/cache/
-
-# IDE and OS files
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
-INI;
-
-        $path = $this->rootDir . '/.deployignore';
-        $this->writeFile($path, $content, $force);
-    }
-
-    private function rotateBackups(): void
-    {
-        $backupRoot = $this->config['backup_path'];
-        $retention = (int) ($this->config['backup_retention'] ?? 5);
-
-        if (!is_dir($backupRoot)) {
-            return;
-        }
-
-        $backups = array_filter(glob($backupRoot . DIRECTORY_SEPARATOR . 'backup_*'), 'is_dir');
-
-        if (count($backups) <= $retention) {
-            return;
-        }
-
-        usort($backups, function ($a, $b) {
-            return filemtime($b) <=> filemtime($a);
-        });
-
-        $backupsToDelete = array_slice($backups, $retention);
-
-        $this->ui->info("🧹 Cleaning up old backups (retention limit: $retention)...");
-        foreach ($backupsToDelete as $oldBackup) {
-            if ($this->dryRun) {
-                $this->ui->info("[Dry Run] Would remove old backup: " . basename($oldBackup));
-                continue;
-            }
-
-            $this->fs->removeFolder($oldBackup);
-            $this->ui->success("Removed old backup: " . basename($oldBackup));
-        }
+        $this->ui->info("ShipIt - PHP Deployment Orchestrator\n");
+        $this->ui->info("Usage:");
+        $this->ui->info("  shipit [command] [options]\n");
+        $this->ui->info("Commands:");
+        $this->ui->info("  deploy           Run the full deployment lifecycle (default)");
+        $this->ui->info("  rollback [id]    Revert to the most recent or specified backup");
+        $this->ui->info("  validate         Run configuration and environment validation");
+        $this->ui->info("  registry:prune   Remove non-existent projects from the global registry");
+        $this->ui->info("  init             Initialize ShipIt in the current directory");
+        $this->ui->info("  doctor           Check system prerequisites and setup");
+        $this->ui->info("  status           Show project configuration and task order");
+        $this->ui->info("  backups          List available backups");
+        $this->ui->info("  list             List all tasks and hooks in run order");
+        $this->ui->info("  config           View or update configuration keys");
+        $this->ui->info("  version          Show current ShipIt version\n");
+        $this->ui->info("Options:");
+        $this->ui->info("  --dry-run        Show what would be done without making changes");
+        $this->ui->info("  --only=task1,task2 Only run specific tasks");
+        $this->ui->info("  --ignore=task1   Skip specific tasks");
+        $this->ui->info("  --ignore-all     Skip all built-in tasks (useful for only hooks)");
+        $this->ui->info("  --log            Enable detailed logging for the current run");
+        $this->ui->info("  --global         Apply config command to the global registry\n");
     }
 
     private function doDoctor(): void
@@ -1526,5 +1469,15 @@ INI;
     {
         $this->printLogo();
         $this->ui->info("ShipIt version " . self::VERSION);
+    }
+
+    public function getRootDir(): string
+    {
+        return $this->rootDir;
+    }
+
+    public function getConfig(): array
+    {
+        return $this->config;
     }
 }

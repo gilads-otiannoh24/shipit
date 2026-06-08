@@ -31,7 +31,7 @@ class BackupRotationTest extends TestCase
 
         // Inject variables using Reflection
         $reflector = new ReflectionClass(ShipIt::class);
-        
+
         $configProp = $reflector->getProperty('config');
         $configProp->setValue($this->shipIt, [
             'backup_path' => $this->backupDir,
@@ -112,7 +112,7 @@ class BackupRotationTest extends TestCase
         // Invoke rollback with specific target via Reflection
         $reflector = new ReflectionClass(ShipIt::class);
         $method = $reflector->getMethod('doRollback');
-        
+
         // 1. Specific Target (backup1)
         $method->invoke($this->shipIt, ['bin/shipit', 'rollback', 'backup_20260601_120000']);
         $this->assertFileExists($this->tempDir . '/file1.txt');
@@ -156,5 +156,45 @@ class BackupRotationTest extends TestCase
 
         $this->assertFileExists($this->tempDir . '/file1.txt');
         $this->assertSame('one', file_get_contents($this->tempDir . '/file1.txt'));
+    }
+
+    public function testBackupEnvOption(): void
+    {
+        // 1. Setup config with backup_env => false
+        $reflector = new ReflectionClass(ShipIt::class);
+        $configProp = $reflector->getProperty('config');
+        $configProp->setValue($this->shipIt, [
+            'backup_path' => $this->backupDir,
+            'backup_retention' => 3,
+            'backup_env' => false
+        ]);
+
+        // Create a mock .env file in rootDir ($this->tempDir)
+        file_put_contents($this->tempDir . '/.env', 'DATABASE_URL=mysql://...');
+        file_put_contents($this->tempDir . '/app.php', '<?php');
+
+        // Trigger backup
+        $backupMethod = $reflector->getMethod('doBackup');
+        $backupMethod->invoke($this->shipIt);
+
+        // Find the created backup directory
+        $backups = glob($this->backupDir . '/backup_*');
+        $this->assertCount(1, $backups);
+        $backupFolder = $backups[0];
+
+        // Assert that app.php was backed up but .env was NOT
+        $this->assertFileExists($backupFolder . '/app.php');
+        $this->assertFileDoesNotExist($backupFolder . '/.env');
+
+        // 2. Modify local .env to simulate dynamic production change
+        file_put_contents($this->tempDir . '/.env', 'DATABASE_URL=postgres://...');
+
+        // Trigger rollback
+        $rollbackMethod = $reflector->getMethod('doRollback');
+        $rollbackMethod->invoke($this->shipIt, ['bin/shipit', 'rollback']);
+
+        // Assert that local .env was PRESERVED during clear & rollback, and contains the updated config
+        $this->assertFileExists($this->tempDir . '/.env');
+        $this->assertSame('DATABASE_URL=postgres://...', file_get_contents($this->tempDir . '/.env'));
     }
 }
