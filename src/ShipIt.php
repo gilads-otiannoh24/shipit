@@ -133,7 +133,7 @@ class ShipIt
         }
         $this->currentCmd = $cmd;
 
-        if ($cmd !== 'config' || count($argv) <= 2) {
+        if ($cmd !== 'config' && $cmd !== 'version' && !in_array('--version', $argv, true) && !in_array('-v', $argv, true)) {
             $this->printLogo();
         }
 
@@ -1487,7 +1487,6 @@ PHP;
 
     private function showVersion(): void
     {
-        $this->printLogo();
         $this->ui->info("ShipIt version " . self::VERSION);
     }
 
