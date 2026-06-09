@@ -21,7 +21,7 @@ use ShipIt\Validation\Rules\GlobalRegistryRule;
 
 class ShipIt
 {
-    public const VERSION = '0.0.2';
+    public const VERSION = '0.0.3-alpha';
 
     private TerminalUI $ui;
     private TaskRunner $runner;
