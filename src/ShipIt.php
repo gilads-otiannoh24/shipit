@@ -360,8 +360,20 @@ class ShipIt
         $this->initAdapterFile($force);
         $this->initDeployIgnoreFile($force);
 
+        // Attempt to create the backup directory if it doesn't exist
+        $this->loadConfig();
+        $backupRoot = $this->config['backup_path'] ?? null;
+        if ($backupRoot && !is_dir($backupRoot) && !$this->dryRun) {
+            $this->ui->info("Attempting to create backup directory: $backupRoot");
+            if (!@mkdir($backupRoot, 0777, true) && !is_dir($backupRoot)) {
+                $this->ui->warning("⚠️  Could not create backup directory at $backupRoot. You may need to create it manually or check permissions.");
+            } else {
+                $this->ui->success("Created backup directory: $backupRoot");
+            }
+        }
+
         $this->ui->success("\n✅ ShipIt initialized successfully in " . $this->deployDir);
-        $this->updateGlobalRegistry('success');
+        $this->updateGlobalRegistry();
     }
 
     private function writeFile(string $path, string $content, bool $force = false): void
@@ -674,10 +686,18 @@ PHP;
         $backupFolder = "$backupRoot/backup_$timestamp";
 
         if (!$this->dryRun && !is_dir($backupRoot)) {
-            mkdir($backupRoot, 0777, true);
+            $this->ui->info("Creating backup directory: $backupRoot");
+            if (!@mkdir($backupRoot, 0777, true) && !is_dir($backupRoot)) {
+                $this->ui->error("❌ Failed to create backup directory: $backupRoot. Please check permissions.");
+                return;
+            }
         }
+
         if (!$this->dryRun && !is_dir($backupFolder)) {
-            mkdir($backupFolder, 0777, true);
+            if (!@mkdir($backupFolder, 0777, true) && !is_dir($backupFolder)) {
+                $this->ui->error("❌ Failed to create specific backup folder: $backupFolder. Please check permissions.");
+                return;
+            }
         }
 
         $this->ui->info("📁 Backup started to $backupRoot ...");

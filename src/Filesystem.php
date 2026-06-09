@@ -64,8 +64,8 @@ class Filesystem
             $fullIgnoreList = array_unique(array_merge($ignoreList, $sourceIgnore));
         }
 
-        if (!$this->dryRun && !file_exists($destination)) {
-            mkdir($destination, 0777, true);
+        if (!$this->dryRun && !is_dir($destination)) {
+            @mkdir($destination, 0777, true);
         } elseif ($this->dryRun && $relativeBase === '') {
             $this->ui->info("[Dry Run] Would create root directory: $destination");
         }

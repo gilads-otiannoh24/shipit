@@ -154,6 +154,8 @@ class GlobalRegistryTest extends TestCase
         $configPath = $this->tempDir . '/.deploy/config.json';
         $projConfig = json_decode(file_get_contents($configPath), true);
         $projConfig['gitRepoUrl'] = 'git@github.com:username/repository.git';
+        $projConfig['user'] = get_current_user();
+        $projConfig['group'] = get_current_user();
         file_put_contents($configPath, json_encode($projConfig, JSON_PRETTY_PRINT));
 
         // 2. Instantiate a fresh ShipIt instance (simulating a new execution run)

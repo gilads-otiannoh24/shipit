@@ -143,16 +143,9 @@ class BackupRotationTest extends TestCase
         touch($backup1, time() - 3600);
         touch($backup2, time());
 
-        // Re-configure TerminalUI stub for this test to return '2' (second option)
-        $ui = $this->createStub(TerminalUI::class);
-        $ui->method('prompt')->willReturn('2');
-
         $reflector = new ReflectionClass(ShipIt::class);
-        $uiProp = $reflector->getProperty('ui');
-        $uiProp->setValue($this->shipIt, $ui);
-
         $method = $reflector->getMethod('doRollback');
-        $method->invoke($this->shipIt, ['bin/shipit', 'rollback']);
+        $method->invoke($this->shipIt, ['bin/shipit', 'rollback', basename($backup1)]);
 
         $this->assertFileExists($this->tempDir . '/file1.txt');
         $this->assertSame('one', file_get_contents($this->tempDir . '/file1.txt'));
